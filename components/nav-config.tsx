@@ -83,6 +83,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
       { title: "전달 링크 관리", url: "/share-admin", icon: <FolderIcon /> },
       { title: "커뮤니티(IRM)", url: "/creator-irm", icon: <HeartHandshakeIcon /> },
       { title: "인플루언서 그룹", url: "/influencers/groups", icon: <FolderIcon /> },
+      { title: "DM 아웃리치", url: "/outreach", icon: <MessagesSquareIcon /> },
     ],
   },
   {

@@ -24,6 +24,7 @@ export const PAGE_META: Record<string, string> = {
   "/campaigns": "캠페인 운영",
   "/campaigns/tasks": "업무 보드",
   "/insta-hub": "Core Insta Hub",
+  "/outreach": "DM 아웃리치",
   "/settings": "설정",
 };
 
