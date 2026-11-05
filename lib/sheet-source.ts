@@ -2,10 +2,10 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import { FIELD_COLUMN, FIELD_KEYS, type FieldKey } from "@/lib/lead-fields";
+import { FIELD_COLUMN, FIELD_KEYS, STAGE_SHEET_VALUE, type FieldKey } from "@/lib/lead-fields";
 import { parseInquiryRows, recordToCustomer, type LeadRecord } from "@/lib/lead-sheet";
 import { UNASSIGNED } from "@/lib/sales-reps";
-import type { Customer } from "@/lib/types";
+import type { Customer, DealStage } from "@/lib/types";
 
 // 문의 시트와의 연결부. 지금은 시트에 붙인 Apps Script 웹 앱(integrations/sheet-bridge)을 호출한다.
 // 나중에 서비스 계정 방식으로 바꿀 때는 이 파일의 call()만 바꾸면 되고, 아래의 읽기·정리·쓰기 규칙은 그대로 쓴다.
@@ -154,6 +154,9 @@ export const assignOwners = (ids: string[], owner: string, user: string) =>
   writeColumn(ids, "담당자", owner === UNASSIGNED ? "" : owner, user);
 
 export const setContract = (ids: string[], user: string) => writeColumn(ids, "단계", "계약", user);
+
+// 파이프라인에서 카드를 옮길 때: 그 고객의 모든 문의 행의 '단계' 칸을 단계에 맞는 글자로 바꾼다(리드는 비움).
+export const setStage = (ids: string[], stage: DealStage, user: string) => writeColumn(ids, "단계", STAGE_SHEET_VALUE[stage], user);
 
 export type FieldResult = { ok: boolean; reason?: string };
 

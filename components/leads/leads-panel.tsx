@@ -43,7 +43,7 @@ import { ContractDialog } from "@/components/leads/contract-dialog";
 import { LeadDetailSheet } from "@/components/leads/lead-detail-sheet";
 import { LeadImportDialog } from "@/components/leads/lead-import-dialog";
 import { MetaSheetDialog } from "@/components/leads/meta-sheet-dialog";
-import { SheetLoginCard } from "@/components/leads/sheet-login-card";
+import { renderSheetStatus } from "@/components/leads/sheet-status-screen";
 import { SOURCE_LABEL } from "@/lib/mock-data";
 import { useCustomerStore } from "@/lib/customer-store";
 import { formatDateTime, formatKst } from "@/lib/format";
@@ -57,12 +57,11 @@ import {
   type MetaSheetConfig,
 } from "@/lib/meta-leads";
 import { OWNER_OPTIONS, SALES_REPS, UNASSIGNED } from "@/lib/sales-reps";
-import { useSheetLeads } from "@/lib/sheet-leads";
+import { useSheetLeads } from "@/components/sheet-leads-provider";
 import type { Customer } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
-const CSV_MODE_KEY = "core-sales-leads-csv-mode";
 const UNCLASSIFIED = "미분류";
 
 type ServiceFilter = "all" | (typeof SERVICE_LABELS)[number] | typeof UNCLASSIFIED;
@@ -92,25 +91,8 @@ const channelOf = (c: Customer) =>
 export function LeadsPanel() {
   const { customers: localCustomers, addCustomer, assignOwner: localAssign, moveStage } = useCustomerStore();
   const sheet = useSheetLeads();
-  // CSV 방식: 구글 시트 연동이 설정돼 있어도 시트를 CSV 파일로 내려받아 올려서 쓸 수 있다(선택은 이 브라우저에 기억한다).
-  const [csvMode, setCsvMode] = React.useState(false);
-  React.useEffect(() => {
-    try {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCsvMode(window.localStorage.getItem(CSV_MODE_KEY) === "1");
-    } catch {
-      // 저장소를 못 쓰면 기본값(구글 연동)으로 둔다
-    }
-  }, []);
-  function chooseCsvMode(on: boolean) {
-    setCsvMode(on);
-    try {
-      if (on) window.localStorage.setItem(CSV_MODE_KEY, "1");
-      else window.localStorage.removeItem(CSV_MODE_KEY);
-    } catch {
-      // 무시
-    }
-  }
+  const csvMode = sheet.csvMode;
+  const chooseCsvMode = sheet.setCsvMode;
   // 구글 시트 연동이 설정돼 있고 CSV 방식을 고르지 않았으면 시트가 원본이다. 아니면 브라우저 저장소 + CSV 가져오기로 동작한다.
   const sheetMode = !csvMode && sheet.status !== "off" && sheet.status !== "checking";
   const customers = sheetMode ? sheet.customers : localCustomers;
@@ -289,29 +271,8 @@ export function LeadsPanel() {
     }
   }
 
-  if (!csvMode && sheet.status === "checking") {
-    return <p className="py-10 text-center text-sm text-muted-foreground">연결을 확인하는 중…</p>;
-  }
-  if (!csvMode && sheet.status === "login") return <SheetLoginCard onLogin={sheet.login} onUseCsv={() => chooseCsvMode(true)} />;
-  if (!csvMode && sheet.status === "loading") {
-    return <p className="py-10 text-center text-sm text-muted-foreground">시트에서 리드를 불러오는 중…</p>;
-  }
-  if (!csvMode && sheet.status === "error") {
-    return (
-      <Card className="mx-auto w-full max-w-md shadow-xs">
-        <CardContent className="space-y-3 text-center">
-          <p className="text-sm font-medium">시트를 불러오지 못했습니다</p>
-          <p role="alert" className="text-xs text-muted-foreground">{sheet.notice?.text ?? "잠시 뒤에 다시 시도해 주세요"}</p>
-          <Button variant="outline" size="sm" onClick={() => void sheet.refresh()}>
-            다시 시도
-          </Button>
-          <button type="button" onClick={() => chooseCsvMode(true)} className="block w-full text-center text-xs text-muted-foreground underline hover:text-foreground">
-            구글 시트 연동 없이 CSV 파일로 가져오기
-          </button>
-        </CardContent>
-      </Card>
-    );
-  }
+  const statusScreen = renderSheetStatus(sheet);
+  if (statusScreen) return statusScreen;
   const detail = sheetMode && detailId ? (customers.find((c) => c.id === detailId) ?? null) : null;
 
   return (

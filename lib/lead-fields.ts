@@ -1,3 +1,15 @@
+import type { DealStage } from "./types";
+
+// 파이프라인 단계를 시트의 '단계' 칸에 적는 글자. 리드는 칸을 비운다.
+export const STAGE_SHEET_VALUE: Record<DealStage, string> = { lead: "", discovery: "상담", proposal: "제안", won: "계약" };
+
+// 고객 태그("계약금액 ₩2,090,000")에서 계약 금액 숫자를 읽는다. 없으면 0.
+export function contractAmountOf(tags: string[]) {
+  const tag = tags.find((t) => t.startsWith("계약금액 "));
+  const n = Number((tag ?? "").replace(/\D/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
 // 시트의 "영업이 수기로 적는 칸" 중 인트라넷에서 기록하는 것들의 공용 규칙(서버·화면이 같이 쓴다).
 // 서버는 이 규칙으로 입력을 다시 검증하고, 화면은 같은 규칙으로 시트가 쓰는 표기(예: "2026. 3. 12.")로 바꿔 보낸다.
 

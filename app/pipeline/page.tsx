@@ -15,6 +15,9 @@ import {
 } from "@/components/ui/card";
 import { StatGrid, type Stat } from "@/components/stat-card";
 import { AddCustomerDialog } from "@/components/customers/add-customer-dialog";
+import { renderSheetStatus } from "@/components/leads/sheet-status-screen";
+import { SheetPipeline } from "@/components/pipeline/sheet-pipeline";
+import { useSheetLeads } from "@/components/sheet-leads-provider";
 import { OperationStatusBadge } from "@/components/customers/operation-status-badge";
 import { STAGE_LABEL, STAGE_ORDER } from "@/lib/mock-data";
 import { useCustomerStore } from "@/lib/customer-store";
@@ -173,6 +176,11 @@ function Column({
 export default function PipelinePage() {
   const { customers, moveStage } = useCustomerStore();
   const [draggingId, setDraggingId] = React.useState<string | null>(null);
+  // 구글 시트 연동이 설정돼 있고 CSV 방식을 고르지 않았으면 시트가 원본이다(리드 인박스와 같은 로그인·데이터를 공유).
+  const sheet = useSheetLeads();
+  const statusScreen = renderSheetStatus(sheet);
+  if (statusScreen) return statusScreen;
+  if (!sheet.csvMode && sheet.status === "ready") return <SheetPipeline sheet={sheet} />;
 
   const byStage = STAGE_ORDER.map((stage) => ({
     stage,

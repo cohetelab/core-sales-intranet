@@ -8,6 +8,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { AgentDockPanel, AgentDockProvider } from "@/components/agent-dock";
+import { SheetLeadsProvider } from "@/components/sheet-leads-provider";
 import { CustomerStoreProvider } from "@/lib/customer-store";
 import { InfluencerStoreProvider } from "@/lib/influencer-store";
 import { InfluencerGroupStoreProvider } from "@/lib/influencer-group-store";
@@ -20,6 +21,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <InfluencerStoreProvider>
         <InfluencerGroupStoreProvider>
           <TooltipProvider delayDuration={0}>
+            <SheetLeadsProvider>
             <AgentDockProvider>
             <SidebarProvider
               style={
@@ -47,6 +49,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
               <AgentDockPanel />
             </SidebarProvider>
             </AgentDockProvider>
+            </SheetLeadsProvider>
           </TooltipProvider>
         </InfluencerGroupStoreProvider>
       </InfluencerStoreProvider>

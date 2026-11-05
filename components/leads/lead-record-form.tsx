@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { FIELD_KEYS, cleanCell, fromSheetDate, noteLine, sameCell, toSheetDate, todayKst, type FieldKey } from "@/lib/lead-fields";
+import { FIELD_KEYS, cleanCell, formatContract, fromSheetDate, noteLine, sameCell, toSheetDate, todayKst, type FieldKey } from "@/lib/lead-fields";
 
 type Raw = Partial<Record<FieldKey, string>>;
 export type RecordResult = { ok: boolean; message?: string; raw?: Raw };
@@ -17,6 +17,7 @@ const initialFrom = (raw: Raw) => ({
   lastContact: fromSheetDate(raw.lastContact),
   retouch: fromSheetDate(raw.retouch),
   memo: cleanCell(raw.memo),
+  contract: cleanCell(raw.contract).replace(/\D/g, ""),
 });
 
 // 상담 기록 폼. 열었을 때의 시트 원문(base)을 기억해 두었다가 저장할 때 같이 보낸다.
@@ -24,10 +25,12 @@ const initialFrom = (raw: Raw) => ({
 export function LeadRecordForm({
   raw,
   user,
+  showContract = false,
   onSave,
 }: {
   raw: Raw;
   user: string;
+  showContract?: boolean;
   onSave: (changes: Raw, base: Raw) => Promise<RecordResult>;
 }) {
   const [base, setBase] = React.useState<Raw>(raw);
@@ -53,6 +56,7 @@ export function LeadRecordForm({
   const contact = noteText && !contactTouched ? todayKst() : f.lastContact;
   const probability = f.probability.trim();
   const probabilityBad = probability !== "" && !(/^\d{1,3}$/.test(probability) && Number(probability) <= 100);
+  const contractBad = showContract && f.contract !== "" && !(/^\d{1,13}$/.test(f.contract) && Number(f.contract) > 0 && Number(f.contract) <= 1_000_000_000_000);
 
   const changes: Raw = {};
   if (noteText) {
@@ -64,10 +68,11 @@ export function LeadRecordForm({
   if (f.nextAction.trim() !== init.nextAction) changes.nextAction = f.nextAction.trim();
   if (probability !== init.probability && !probabilityBad) changes.probability = probability ? `${probability}%` : "";
   if (f.memo.trim() !== init.memo) changes.memo = f.memo.trim();
+  if (showContract && !contractBad && f.contract !== init.contract) changes.contract = f.contract ? formatContract(Number(f.contract)) : "";
   const hasChanges = Object.keys(changes).length > 0;
 
   async function save() {
-    if (!hasChanges || saving || probabilityBad) return;
+    if (!hasChanges || saving || probabilityBad || contractBad) return;
     setSaving(true);
     setMessage(null);
     const res = await onSave(changes, base);
@@ -140,13 +145,30 @@ export function LeadRecordForm({
       </div>
       {probabilityBad && <p role="alert" className="text-[11px] text-destructive">가능성은 0~100 사이 숫자로 적어 주세요.</p>}
 
+      {showContract && (
+        <div className="space-y-1">
+          <Label htmlFor="lead-contract" className="text-xs">계약 금액(원)</Label>
+          <Input
+            id="lead-contract"
+            inputMode="numeric"
+            className="h-8 text-xs"
+            aria-invalid={contractBad}
+            value={f.contract}
+            onChange={(e) => setF((p) => ({ ...p, contract: e.target.value.replace(/\D/g, "") }))}
+            placeholder="예: 2090000"
+          />
+          {f.contract && !contractBad && <p className="text-[11px] text-muted-foreground tabular-nums">시트에는 {formatContract(Number(f.contract))} 로 기록됩니다</p>}
+          {contractBad && <p role="alert" className="text-[11px] text-destructive">금액은 숫자만 적어 주세요.</p>}
+        </div>
+      )}
+
       <div className="space-y-1">
         <Label htmlFor="lead-memo" className="text-xs">메모</Label>
         <Textarea id="lead-memo" rows={2} maxLength={1000} value={f.memo} onChange={(e) => setF((p) => ({ ...p, memo: e.target.value }))} className="text-xs" />
       </div>
 
       <div className="flex items-center gap-2">
-        <Button size="sm" onClick={() => void save()} disabled={!hasChanges || saving || probabilityBad}>
+        <Button size="sm" onClick={() => void save()} disabled={!hasChanges || saving || probabilityBad || contractBad}>
           {saving ? "시트에 저장하는 중…" : "시트에 저장"}
         </Button>
         {!hasChanges && !message && <span className="text-[11px] text-muted-foreground">바뀐 내용이 없습니다</span>}

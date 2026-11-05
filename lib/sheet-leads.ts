@@ -4,7 +4,7 @@ import * as React from "react";
 
 import { FIELD_LABEL, type FieldKey } from "@/lib/lead-fields";
 import { UNASSIGNED } from "@/lib/sales-reps";
-import type { Customer } from "@/lib/types";
+import type { Customer, DealStage } from "@/lib/types";
 
 // 시트 연동 모드의 리드 데이터. 서버(/api/leads)가 시트를 읽어 준 것을 화면에 올리고,
 // 30초마다·창이 다시 보일 때마다 새로 확인한다. 쓰기는 먼저 화면에 반영한 뒤 서버에 보내고,
@@ -14,6 +14,7 @@ export type SheetStatus = "checking" | "off" | "login" | "loading" | "ready" | "
 export type Notice = { kind: "error" | "info"; text: string; source?: "load" | "write" }; // load: 조회 실패(복구되면 자동으로 사라짐)
 
 const POLL_MS = 30_000;
+const CSV_MODE_KEY = "core-sales-leads-csv-mode";
 
 const REASON_TEXT: Record<string, string> = {
   conflict: "시트에서 다른 사람이 먼저 바꿨습니다",
@@ -53,8 +54,29 @@ type ListResponse = {
   gid: number;
 };
 
-export function useSheetLeads() {
+// 앱 전체가 공유하는 상태(components/sheet-leads-provider.tsx). active는 이 데이터를 보는 화면이 하나라도 있다는 뜻이고,
+// 그때만 로그인 확인과 30초 갱신을 한다(다른 화면에서는 시트를 건드리지 않는다).
+export function useSheetLeadsState(active: boolean) {
   const [status, setStatus] = React.useState<SheetStatus>("checking");
+  // CSV 방식: 구글 시트 연동이 설정돼 있어도 시트를 CSV 파일로 내려받아 올려서 쓸 수 있다(선택은 이 브라우저에 기억한다).
+  const [csvMode, setCsvModeState] = React.useState(false);
+  React.useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCsvModeState(window.localStorage.getItem(CSV_MODE_KEY) === "1");
+    } catch {
+      // 저장소를 못 쓰면 기본값(구글 연동)으로 둔다
+    }
+  }, []);
+  const setCsvMode = React.useCallback((on: boolean) => {
+    setCsvModeState(on);
+    try {
+      if (on) window.localStorage.setItem(CSV_MODE_KEY, "1");
+      else window.localStorage.removeItem(CSV_MODE_KEY);
+    } catch {
+      // 무시
+    }
+  }, []);
   const [user, setUser] = React.useState<string | null>(null);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [meta, setMeta] = React.useState<Record<string, LeadMeta>>({});
@@ -67,6 +89,7 @@ export function useSheetLeads() {
   const etag = React.useRef<string | null>(null);
   const pending = React.useRef(0); // 쓰기가 진행 중이면 갱신 결과를 화면에 적용하지 않는다
   const hasData = React.useRef(false);
+  const checked = React.useRef(false); // 로그인 확인은 앱을 연 뒤 처음 필요할 때 한 번만
 
   // poll: 주기적 확인(바뀐 게 없으면 304). now: 쓰기 직후·새로고침·로그인(서버 캐시도 건너뛰고 항상 새로 읽는다)
   const load = React.useCallback(async (mode: "poll" | "now" = "poll") => {
@@ -108,28 +131,25 @@ export function useSheetLeads() {
     }
   }, []);
 
-  // 처음에 설정 여부와 로그인 상태를 확인한다.
+  // 이 데이터를 보는 화면이 처음 열릴 때 설정 여부와 로그인 상태를 확인한다.
   React.useEffect(() => {
-    let alive = true;
+    if (!active || checked.current) return;
+    checked.current = true;
     fetch("/api/leads/session", { cache: "no-store" })
       .then((r) => r.json())
       .then((s: { configured?: boolean; user?: string | null }) => {
-        if (!alive) return;
         if (!s.configured) return setStatus("off");
         if (!s.user) return setStatus("login");
         setUser(s.user);
         setStatus("loading");
         void load("now");
       })
-      .catch(() => alive && setStatus("off"));
-    return () => {
-      alive = false;
-    };
-  }, [load]);
+      .catch(() => setStatus("off"));
+  }, [active, load]);
 
   // 보이는 동안 30초마다, 그리고 창이 다시 보이거나 포커스를 받을 때 새로 확인한다.
   React.useEffect(() => {
-    if (status !== "ready") return;
+    if (!active || status !== "ready") return;
     const tick = () => document.visibilityState === "visible" && void load();
     const id = window.setInterval(tick, POLL_MS);
     window.addEventListener("focus", tick);
@@ -139,7 +159,7 @@ export function useSheetLeads() {
       window.removeEventListener("focus", tick);
       document.removeEventListener("visibilitychange", tick);
     };
-  }, [status, load]);
+  }, [active, status, load]);
 
   const refresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -244,6 +264,14 @@ export function useSheetLeads() {
     [write]
   );
 
+  // 파이프라인에서 카드를 다른 단계로 옮긴다. 시트의 '단계' 칸(그 고객의 모든 문의 행)에 기록된다.
+  const moveStage = React.useCallback(
+    async (id: string, stage: DealStage) => {
+      await write("/api/leads/stage", { id, stage }, [id], (c) => ({ ...c, stage }));
+    },
+    [write]
+  );
+
   // 상담 기록: 폼을 열었을 때의 칸 원문(base)과 함께 보낸다. 그 사이 시트에서 바뀐 칸은 덮어쓰지 않고 알려 준다.
   const record = React.useCallback(
     async (
@@ -280,8 +308,8 @@ export function useSheetLeads() {
   );
 
   return {
-    status, user, customers, meta, sheetUrl, gid, fetchedAt, refreshing, notice,
+    status, user, customers, meta, sheetUrl, gid, fetchedAt, refreshing, notice, csvMode, setCsvMode,
     dismissNotice: () => setNotice(null),
-    refresh, login, logout, assign, convert, record,
+    refresh, login, logout, assign, convert, moveStage, record,
   };
 }

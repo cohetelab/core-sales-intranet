@@ -75,6 +75,7 @@ export function LeadDetailSheet({
                   key={customer.id}
                   raw={raw}
                   user={user}
+                  showContract={customer.stage === "won"}
                   onSave={(changes, base) => onRecord(customer.id, changes, base)}
                 />
               )}
