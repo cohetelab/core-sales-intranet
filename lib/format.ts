@@ -23,6 +23,24 @@ export function formatDateTime(iso: string) {
   return dayjs(iso).format("MM.DD HH:mm");
 }
 
+// 한국 시간으로 고정해서 "26.11.05 14:23"(withYear=false면 "11.05 14:23")로 보여 준다.
+// 문의 시각은 시트의 한국 시간이라, 보는 사람의 브라우저 위치에 따라 달라지면 안 된다.
+export function formatKst(iso: string, withYear = true) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "-";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Seoul",
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${withYear ? `${get("year")}.` : ""}${get("month")}.${get("day")} ${get("hour")}:${get("minute")}`;
+}
+
 export function timeAgo(iso: string, now = DEMO_TODAY) {
   const d = now.diff(dayjs(iso), "minute");
   if (d < 60) return `${Math.max(d, 0)}분 전`;

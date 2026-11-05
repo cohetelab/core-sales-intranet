@@ -6,7 +6,7 @@ import { ExternalLinkIcon } from "lucide-react";
 import { LeadRecordForm, type RecordResult } from "@/components/leads/lead-record-form";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { formatDateTime } from "@/lib/format";
+import { formatKst } from "@/lib/format";
 import type { FieldKey } from "@/lib/lead-fields";
 import type { Customer } from "@/lib/types";
 
@@ -54,7 +54,7 @@ export function LeadDetailSheet({
                 <dt className="text-muted-foreground">다음 액션</dt>
                 <dd>{customer.nextStep ?? "-"}</dd>
                 <dt className="text-muted-foreground">문의 접수</dt>
-                <dd className="tabular-nums">{formatDateTime(customer.createdAt)}</dd>
+                <dd className="tabular-nums">{formatKst(customer.createdAt)}</dd>
               </dl>
               {customer.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
@@ -85,7 +85,7 @@ export function LeadDetailSheet({
                     <li key={a.id} className="rounded-2xl bg-muted/50 px-3 py-2">
                       <p className="flex items-center justify-between gap-2 text-xs">
                         <span className="font-medium">{a.summary}</span>
-                        <span className="shrink-0 text-muted-foreground tabular-nums">{formatDateTime(a.at)}</span>
+                        <span className="shrink-0 text-muted-foreground tabular-nums">{formatKst(a.at)}</span>
                       </p>
                       {a.detail && <p className="mt-1 text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground">{a.detail}</p>}
                     </li>

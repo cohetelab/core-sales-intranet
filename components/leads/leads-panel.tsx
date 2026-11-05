@@ -46,7 +46,7 @@ import { MetaSheetDialog } from "@/components/leads/meta-sheet-dialog";
 import { SheetLoginCard } from "@/components/leads/sheet-login-card";
 import { SOURCE_LABEL } from "@/lib/mock-data";
 import { useCustomerStore } from "@/lib/customer-store";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDateTime, formatKst } from "@/lib/format";
 import { CHANNELS, SERVICE_LABELS, planBalancedAssignment } from "@/lib/lead-sheet";
 import {
   clearMetaSheetConfig,
@@ -523,7 +523,7 @@ export function LeadsPanel() {
                   <TableHead className="w-8">
                     <Checkbox checked={allSelected} onCheckedChange={(v) => toggleAll(v === true)} aria-label={`조건에 맞는 ${filtered.length}건 전체 선택`} />
                   </TableHead>
-                  <TableHead className="w-20">문의일</TableHead>
+                  <TableHead className="w-32">문의일시</TableHead>
                   <TableHead>상호명</TableHead>
                   <TableHead>서비스</TableHead>
                   <TableHead>연락처</TableHead>
@@ -542,7 +542,7 @@ export function LeadsPanel() {
                       <TableCell>
                         <Checkbox checked={selected.has(c.id)} onCheckedChange={(v) => toggleOne(c.id, v === true)} aria-label={`${c.company} 선택`} />
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground tabular-nums">{formatDate(c.createdAt, "YY.MM.DD")}</TableCell>
+                      <TableCell className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">{formatKst(c.createdAt)}</TableCell>
                       <TableCell className="font-medium">
                         {sheetMode ? (
                           <button type="button" onClick={() => setDetailId(c.id)} className="text-left hover:underline">
