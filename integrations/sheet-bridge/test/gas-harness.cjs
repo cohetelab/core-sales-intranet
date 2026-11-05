@@ -38,16 +38,19 @@ function makeEnv(rows, { token = "secret-token" } = {}) {
   const data = new FakeSheet("문의", rows);
   const sheets = [data];
   let locks = 0;
+  let active = data;
   const ss = {
     getSheets: () => sheets,
     getSheetByName: n => sheets.find(s => s.name === n) || null,
-    insertSheet: n => { const s = new FakeSheet(n, []); sheets.push(s); return s; },
+    insertSheet: (n, idx) => { const s = new FakeSheet(n, []); sheets.splice(idx ?? sheets.length, 0, s); active = s; return s; }, // 실제 구글처럼 새 탭이 활성 시트가 된다
+    getActiveSheet: () => active,
+    setActiveSheet: s => { active = s; return s; },
     getUrl: () => "https://docs.google.com/spreadsheets/d/FAKE/edit",
   };
   const ctx = {
     module: { exports: {} }, console,
     ContentService: { MimeType: { JSON: "json" }, createTextOutput: t => ({ text: t, setMimeType() { return this; } }) },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k === "TOKEN" ? token : null), setProperty: (k, v) => { if (k === "TOKEN") token = v; } }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k === "BRIDGE_TOKEN" ? token : null), setProperty: (k, v) => { if (k === "BRIDGE_TOKEN") token = v; } }) },
     LockService: { getScriptLock: () => ({ waitLock() { locks++; }, releaseLock() {} }) },
     Utilities: { formatDate: () => "2026-11-06 10:00:00", getUuid: () => require("crypto").randomUUID() },
     Logger: { log() {} },
@@ -56,7 +59,7 @@ function makeEnv(rows, { token = "secret-token" } = {}) {
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(CODE, "utf8"), ctx);
   const call = body => JSON.parse(ctx.module.exports.doPost({ postData: { contents: typeof body === "string" ? body : JSON.stringify(body) } }).text);
-  return { data, ss, sheets, call, locks: () => locks, exports: ctx.module.exports, doPost: ctx.module.exports.doPost };
+  return { data, ss, sheets, call, locks: () => locks, active: () => active, exports: ctx.module.exports, doPost: ctx.module.exports.doPost };
 }
 
 // 실제 시트와 같은 모양: 메모 행, 연도 행, 헤더, 데이터(중간에 빈 행)

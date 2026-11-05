@@ -30,6 +30,7 @@ const send = (e, updates, user = "u") => e.call({ token: T, action: "update", us
   const log = e.sheets.find(s => s.name === "인트라넷_기록");
   ok("로그 탭 생성 + 헤더 + 2줄", log && log.rows.length === 3 && log.rows[0][0] === "시각" && log.rows[1][1] === "이익재(Ian)" && log.rows[1][7] === "ok");
   ok("스크립트 잠금 사용", e.locks() === 1);
+  ok("기록 탭을 만들어도 원래 활성 시트·첫 번째 탭은 그대로", e.active() === e.data && e.sheets[0] === e.data && e.sheets[e.sheets.length - 1].name === "인트라넷_기록");
 }
 {
   const e = makeEnv(fixture());

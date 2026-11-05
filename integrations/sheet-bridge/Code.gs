@@ -4,8 +4,12 @@
  * 인트라넷 서버가 이 웹 앱을 호출해서 문의 시트를 읽고, 영업이 수기로 적는 칸에만 값을 쓴다.
  * 설정 방법은 같은 폴더의 README.md 를 본다.
  *
+ * 시트에 이미 Apps Script(문의 수집 자동화 등)가 있다면 그 프로젝트에 붙이지 말고, 새 독립 프로젝트에 붙인다.
+ * (한 프로젝트에는 doPost 가 하나뿐이라 기존 웹 훅과 충돌하고, 기존 코드·권한·배포에 영향을 줄 수 있다)
+ * 속성 이름은 BRIDGE_ 로 시작해서 다른 스크립트 속성과 겹치지 않게 했다.
+ *
  * 안전장치
- *  - 모든 요청은 스크립트 속성 TOKEN 과 같은 토큰이 있어야 한다.
+ *  - 모든 요청은 스크립트 속성 BRIDGE_TOKEN 과 같은 토큰이 있어야 한다.
  *  - 쓰기는 WRITABLE 에 있는 수기 칸만 가능하다. 날짜·상호명·연락처 같은 자동 입력 칸은 쓰지 않는다.
  *  - 쓰기 직전에 그 행의 '날짜'와 '연락처'가 요청과 같은지, 칸의 현재 값이 요청이 알던 값과 같은지 확인한다.
  *    (누가 시트를 정렬하거나 행을 지우거나 같은 칸을 먼저 고친 경우에는 쓰지 않고 이유를 돌려준다)
@@ -56,12 +60,12 @@ function safeText_(v) {
 }
 
 function getSpreadsheet_() {
-  var id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+  var id = PropertiesService.getScriptProperties().getProperty('BRIDGE_SPREADSHEET_ID');
   return id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
 }
 
 function getDataSheet_(ss) {
-  var name = PropertiesService.getScriptProperties().getProperty('SHEET_NAME');
+  var name = PropertiesService.getScriptProperties().getProperty('BRIDGE_SHEET_NAME');
   var sheet = name ? ss.getSheetByName(name) : ss.getSheets()[0];
   if (!sheet) throw new Error('데이터 탭을 찾지 못했습니다');
   return sheet;
@@ -83,18 +87,18 @@ function findHeader_(data) {
 }
 
 /**
- * 설정 도우미: 편집기에서 이 함수를 실행하면 임의의 긴 토큰을 만들어 스크립트 속성 TOKEN 에 저장하고
+ * 설정 도우미: 편집기에서 이 함수를 실행하면 임의의 긴 토큰을 만들어 스크립트 속성 BRIDGE_TOKEN 에 저장하고
  * 실행 로그에 보여 준다. 이미 있으면 새로 만들지 않고 그대로 보여 준다(잃어버렸을 때도 다시 실행하면 된다).
  * 이 값을 Vercel 의 SHEET_SCRIPT_TOKEN 에 똑같이 넣는다.
  */
 function setupToken() {
   var props = PropertiesService.getScriptProperties();
-  var token = props.getProperty('TOKEN');
+  var token = props.getProperty('BRIDGE_TOKEN');
   if (!token) {
     token = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
-    props.setProperty('TOKEN', token);
+    props.setProperty('BRIDGE_TOKEN', token);
   }
-  Logger.log('TOKEN = ' + token);
+  Logger.log('SHEET_SCRIPT_TOKEN 에 넣을 값 = ' + token);
   return token;
 }
 
@@ -105,7 +109,7 @@ function doGet() {
 function doPost(e) {
   try {
     var body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    var token = PropertiesService.getScriptProperties().getProperty('TOKEN');
+    var token = PropertiesService.getScriptProperties().getProperty('BRIDGE_TOKEN');
     if (!token || !safeEqual_(String(body.token || ''), token)) return json_({ ok: false, error: 'unauthorized' });
 
     var ss = getSpreadsheet_();
@@ -204,8 +208,11 @@ function appendLog_(ss, logs) {
   if (!logs.length) return;
   var sheet = ss.getSheetByName(LOG_SHEET);
   if (!sheet) {
-    sheet = ss.insertSheet(LOG_SHEET);
+    // 새 탭을 만들면 그 탭이 활성 시트가 된다. 같은 시트를 다른 스크립트가 getActiveSheet 로 쓰고 있을 수 있어 원래 활성 시트로 되돌린다.
+    var active = ss.getActiveSheet();
+    sheet = ss.insertSheet(LOG_SHEET, ss.getSheets().length);
     sheet.getRange(1, 1, 1, 8).setValues([['시각', '사용자', '행', '날짜', '칸', '이전 값', '새 값', '결과']]);
+    if (active) ss.setActiveSheet(active);
   }
   var now = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
   var rows = logs.map(function (l) {
