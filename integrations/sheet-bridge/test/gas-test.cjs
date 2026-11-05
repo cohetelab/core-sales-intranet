@@ -119,5 +119,14 @@ const send = (e, updates, user = "u") => e.call({ token: T, action: "update", us
   ok("헤더는 3번째 행에서 찾음", f.row === 3 && f.cols["상호명"] === 1);
   ok("열 문자 변환(A, Z, AA, AB)", [0, 25, 26, 27].map(e.exports.columnLetter_).join(",") === "A,Z,AA,AB");
 }
+{
+  // 설정 도우미: 토큰이 없을 때만 만들고, 다시 실행해도 같은 값을 보여 준다
+  const e = makeEnv(fixture(), { token: null });
+  ok("토큰이 없으면 모든 요청 거절", e.call({ token: "", action: "read" }).error === "unauthorized");
+  const t1 = e.exports.setupToken();
+  const t2 = e.exports.setupToken();
+  ok("setupToken: 64자 토큰 생성, 다시 실행해도 같은 값", /^[0-9a-f]{64}$/.test(t1) && t1 === t2);
+  ok("만든 토큰으로 읽기 가능, 틀린 토큰은 거절", e.call({ token: t1, action: "read" }).ok === true && e.call({ token: "x".repeat(64), action: "read" }).error === "unauthorized");
+}
 console.log(fail ? `\n실패 ${fail}건` : "\n전부 통과");
 process.exit(fail ? 1 : 0);

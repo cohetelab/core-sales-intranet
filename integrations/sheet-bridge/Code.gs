@@ -82,6 +82,22 @@ function findHeader_(data) {
   return null;
 }
 
+/**
+ * 설정 도우미: 편집기에서 이 함수를 실행하면 임의의 긴 토큰을 만들어 스크립트 속성 TOKEN 에 저장하고
+ * 실행 로그에 보여 준다. 이미 있으면 새로 만들지 않고 그대로 보여 준다(잃어버렸을 때도 다시 실행하면 된다).
+ * 이 값을 Vercel 의 SHEET_SCRIPT_TOKEN 에 똑같이 넣는다.
+ */
+function setupToken() {
+  var props = PropertiesService.getScriptProperties();
+  var token = props.getProperty('TOKEN');
+  if (!token) {
+    token = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+    props.setProperty('TOKEN', token);
+  }
+  Logger.log('TOKEN = ' + token);
+  return token;
+}
+
 function doGet() {
   return json_({ ok: true, service: 'sheet-bridge' });
 }
@@ -201,5 +217,5 @@ function appendLog_(ss, logs) {
 
 // Apps Script 에서는 module 이 없어서 무시된다. 로컬 테스트에서만 쓴다.
 if (typeof module !== 'undefined') {
-  module.exports = { doGet: doGet, doPost: doPost, findHeader_: findHeader_, columnLetter_: columnLetter_ };
+  module.exports = { doGet: doGet, doPost: doPost, setupToken: setupToken, findHeader_: findHeader_, columnLetter_: columnLetter_ };
 }

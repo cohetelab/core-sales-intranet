@@ -47,9 +47,10 @@ function makeEnv(rows, { token = "secret-token" } = {}) {
   const ctx = {
     module: { exports: {} }, console,
     ContentService: { MimeType: { JSON: "json" }, createTextOutput: t => ({ text: t, setMimeType() { return this; } }) },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k === "TOKEN" ? token : null) }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k === "TOKEN" ? token : null), setProperty: (k, v) => { if (k === "TOKEN") token = v; } }) },
     LockService: { getScriptLock: () => ({ waitLock() { locks++; }, releaseLock() {} }) },
-    Utilities: { formatDate: () => "2026-11-06 10:00:00" },
+    Utilities: { formatDate: () => "2026-11-06 10:00:00", getUuid: () => require("crypto").randomUUID() },
+    Logger: { log() {} },
     SpreadsheetApp: { getActiveSpreadsheet: () => ss, openById: () => ss },
   };
   vm.createContext(ctx);
