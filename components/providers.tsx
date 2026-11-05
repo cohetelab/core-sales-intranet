@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -12,6 +13,8 @@ import { InfluencerStoreProvider } from "@/lib/influencer-store";
 import { InfluencerGroupStoreProvider } from "@/lib/influencer-group-store";
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  if (pathname.startsWith("/share/")) return <>{children}</>;
   return (
     <CustomerStoreProvider>
       <InfluencerStoreProvider>
