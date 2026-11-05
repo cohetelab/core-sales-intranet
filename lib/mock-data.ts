@@ -1,6 +1,8 @@
+import { SALES_REPS } from "@/lib/sales-reps";
 import type { Customer } from "@/lib/types";
 
-export const REPS = ["김세일", "박영업", "이성장", "최상담"] as const;
+// 영업 담당자는 lib/sales-reps.ts가 정본이다. (샘플 고객의 owner는 예전 이름 그대로 남아 있다)
+export const REPS = SALES_REPS;
 
 export const STAGE_LABEL: Record<Customer["stage"], string> = {
   lead: "리드",

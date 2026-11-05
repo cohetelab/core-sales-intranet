@@ -22,7 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { REPS, SOURCE_LABEL } from "@/lib/mock-data";
+import { SOURCE_LABEL } from "@/lib/mock-data";
+import { OWNER_OPTIONS, UNASSIGNED } from "@/lib/sales-reps";
 import { useCustomerStore } from "@/lib/customer-store";
 import type { DealSource } from "@/lib/types";
 
@@ -32,7 +33,7 @@ const emptyForm = {
   manager: "",
   email: "",
   source: "inbound" as DealSource,
-  owner: REPS[0] as string,
+  owner: UNASSIGNED as string,
 };
 
 export function AddCustomerDialog({
@@ -151,7 +152,7 @@ export function AddCustomerDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {REPS.map((r) => (
+                    {OWNER_OPTIONS.map((r) => (
                       <SelectItem key={r} value={r}>
                         {r}
                       </SelectItem>

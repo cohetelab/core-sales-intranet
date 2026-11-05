@@ -2,8 +2,10 @@
 
 import * as React from "react";
 
+import { mergeImportedCustomer } from "@/lib/lead-sheet";
 import { customers as initialCustomers, STAGE_LABEL } from "@/lib/mock-data";
 import { OPERATION_STATUS_LABEL } from "@/lib/operation-status";
+import { UNASSIGNED } from "@/lib/sales-reps";
 import type {
   ActivityType,
   Customer,
@@ -54,6 +56,11 @@ type CustomerStoreContextValue = {
   moveStage: (id: string, stage: DealStage) => void;
   setOperationStatus: (id: string, status: OperationStatus) => void;
   addActivity: (id: string, input: NewActivityInput) => void;
+  // 문의 시트에서 만든 고객을 한꺼번에 넣는다. 같은 id가 이미 있으면 새 문의 이력만 더하고 영업이 바꾼 값은 지킨다.
+  // removeIds는 함께 지울 고객(예: 샘플 고객)이다.
+  importCustomers: (incoming: Customer[], options?: { removeIds?: string[] }) => void;
+  // 담당 영업 배정(여러 건 가능). 활동 기록에 배정 이력을 남긴다.
+  assignOwner: (ids: string[], owner: string) => void;
 };
 
 const CustomerStoreContext =
@@ -275,7 +282,8 @@ export function CustomerStoreProvider({
                 summary: input.summary,
                 detail: input.detail,
                 at: now,
-                author: CURRENT_USER,
+                // 로그인이 없어서 작성자를 알 수 없다. 담당 영업이 배정돼 있으면 그 사람으로 남긴다.
+                author: c.owner && c.owner !== UNASSIGNED ? c.owner : CURRENT_USER,
               },
               ...c.activities,
             ],
@@ -286,6 +294,60 @@ export function CustomerStoreProvider({
     []
   );
 
+  const importCustomers = React.useCallback(
+    (incoming: Customer[], options?: { removeIds?: string[] }) => {
+      const remove = new Set(options?.removeIds ?? []);
+      setCustomers((prev) => {
+        const kept = remove.size ? prev.filter((c) => !remove.has(c.id)) : prev;
+        const incomingById = new Map(incoming.map((c) => [c.id, c]));
+        const existingIds = new Set(kept.map((c) => c.id));
+        const merged = kept.map((c) => {
+          const inc = incomingById.get(c.id);
+          return inc ? mergeImportedCustomer(c, inc) : c;
+        });
+        const added = incoming
+          .filter((c) => !existingIds.has(c.id))
+          .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+        return [...added, ...merged];
+      });
+    },
+    []
+  );
+
+  const assignOwner = React.useCallback((ids: string[], owner: string) => {
+    if (ids.length === 0) return;
+    const target = new Set(ids);
+    const now = new Date().toISOString();
+    setCustomers((prev) =>
+      prev.map((c) => {
+        if (!target.has(c.id) || c.owner === owner) return c;
+        // 자동으로 넣어 둔 안내 문구("담당자 배정 필요" ↔ "첫 컨택 필요")만 배정 상태에 맞게 바꾼다. 직접 적은 다음 액션은 그대로 둔다.
+        const nextStep =
+          c.nextStep === "담당자 배정 필요" && owner !== UNASSIGNED
+            ? "첫 컨택 필요"
+            : c.nextStep === "첫 컨택 필요" && owner === UNASSIGNED
+              ? "담당자 배정 필요"
+              : c.nextStep;
+        return {
+          ...c,
+          owner,
+          nextStep,
+          lastActivityAt: now,
+          activities: [
+            {
+              id: `${c.id}-a-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              type: "system" as const,
+              summary: `담당 영업 배정: ${c.owner} → ${owner}`,
+              at: now,
+              author: owner,
+            },
+            ...c.activities,
+          ],
+        };
+      })
+    );
+  }, []);
+
   const value = React.useMemo(
     () => ({
       customers,
@@ -295,6 +357,8 @@ export function CustomerStoreProvider({
       moveStage,
       setOperationStatus,
       addActivity,
+      importCustomers,
+      assignOwner,
     }),
     [
       customers,
@@ -304,6 +368,8 @@ export function CustomerStoreProvider({
       moveStage,
       setOperationStatus,
       addActivity,
+      importCustomers,
+      assignOwner,
     ]
   );
 

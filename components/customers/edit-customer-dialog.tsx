@@ -22,7 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { REPS, SOURCE_LABEL, STAGE_LABEL, STAGE_ORDER } from "@/lib/mock-data";
+import { SOURCE_LABEL, STAGE_LABEL, STAGE_ORDER } from "@/lib/mock-data";
+import { OWNER_OPTIONS } from "@/lib/sales-reps";
 import { useCustomerStore } from "@/lib/customer-store";
 import type { Customer, DealSource, DealStage } from "@/lib/types";
 
@@ -199,7 +200,7 @@ export function EditCustomerDialog({ customer }: { customer: Customer }) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {REPS.map((r) => (
+                    {OWNER_OPTIONS.map((r) => (
                       <SelectItem key={r} value={r}>
                         {r}
                       </SelectItem>
