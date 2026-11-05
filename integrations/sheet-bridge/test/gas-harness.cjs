@@ -34,7 +34,7 @@ class FakeSheet {
     };
   }
 }
-function makeEnv(rows, { token = "secret-token" } = {}) {
+function makeEnv(rows, { token = "secret-token", activeNull = false, spreadsheetId = null } = {}) {
   const data = new FakeSheet("문의", rows);
   const sheets = [data];
   let locks = 0;
@@ -50,11 +50,11 @@ function makeEnv(rows, { token = "secret-token" } = {}) {
   const ctx = {
     module: { exports: {} }, console,
     ContentService: { MimeType: { JSON: "json" }, createTextOutput: t => ({ text: t, setMimeType() { return this; } }) },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k === "BRIDGE_TOKEN" ? token : null), setProperty: (k, v) => { if (k === "BRIDGE_TOKEN") token = v; } }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k === "BRIDGE_TOKEN" ? token : k === "BRIDGE_SPREADSHEET_ID" ? spreadsheetId : null), setProperty: (k, v) => { if (k === "BRIDGE_TOKEN") token = v; } }) },
     LockService: { getScriptLock: () => ({ waitLock() { locks++; }, releaseLock() {} }) },
     Utilities: { formatDate: () => "2026-11-06 10:00:00", getUuid: () => require("crypto").randomUUID() },
     Logger: { log() {} },
-    SpreadsheetApp: { getActiveSpreadsheet: () => ss, openById: () => ss },
+    SpreadsheetApp: { getActiveSpreadsheet: () => (activeNull ? null : ss), openById: () => ss }, // activeNull: 시트에 붙지 않은 독립 프로젝트
   };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(CODE, "utf8"), ctx);

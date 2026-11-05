@@ -121,6 +121,14 @@ const send = (e, updates, user = "u") => e.call({ token: T, action: "update", us
   ok("열 문자 변환(A, Z, AA, AB)", [0, 25, 26, 27].map(e.exports.columnLetter_).join(",") === "A,Z,AA,AB");
 }
 {
+  // 독립 프로젝트(시트에 붙지 않음): 시트 ID 속성이 없으면 무슨 설정이 빠졌는지 알려 준다
+  const e = makeEnv(fixture(), { activeNull: true });
+  const r = e.call({ token: T, action: "read" });
+  ok("시트 ID가 없으면 빠진 설정을 알려 줌", r.error === "server_error" && /BRIDGE_SPREADSHEET_ID/.test(r.message), r.message);
+  const e2 = makeEnv(fixture(), { activeNull: true, spreadsheetId: "abc" });
+  ok("BRIDGE_SPREADSHEET_ID가 있으면 읽기 성공", e2.call({ token: T, action: "read" }).ok === true);
+}
+{
   // 설정 도우미: 토큰이 없을 때만 만들고, 다시 실행해도 같은 값을 보여 준다
   const e = makeEnv(fixture(), { token: null });
   ok("토큰이 없으면 모든 요청 거절", e.call({ token: "", action: "read" }).error === "unauthorized");

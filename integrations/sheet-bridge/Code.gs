@@ -61,7 +61,10 @@ function safeText_(v) {
 
 function getSpreadsheet_() {
   var id = PropertiesService.getScriptProperties().getProperty('BRIDGE_SPREADSHEET_ID');
-  return id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
+  var ss = id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
+  // 시트에 붙지 않은 독립 프로젝트에서는 getActiveSpreadsheet 가 null 이다. 무슨 설정이 빠졌는지 알려 준다.
+  if (!ss) throw new Error('시트를 찾지 못했습니다. 스크립트 속성 BRIDGE_SPREADSHEET_ID 에 시트 주소의 /d/ 와 /edit 사이 값을 넣어 주세요');
+  return ss;
 }
 
 function getDataSheet_(ss) {
