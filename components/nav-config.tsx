@@ -66,6 +66,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
       { title: "딜 파이프라인", url: "/pipeline", icon: <KanbanSquareIcon /> },
       { title: "리드 인박스", url: "/leads", icon: <InboxIcon /> },
       { title: "고객사", url: "/customers", icon: <Building2Icon /> },
+      { title: "구글 드라이브로 보기", url: "/customers/drive", icon: <FolderIcon /> },
       { title: "계약·견적", url: "/quotes", icon: <ReceiptTextIcon /> },
       { title: "리포트", url: "/reports", icon: <ChartBarIcon /> },
       { title: "팀", url: "/team", icon: <UsersIcon /> },

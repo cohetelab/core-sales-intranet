@@ -4,6 +4,7 @@ export const PAGE_META: Record<string, string> = {
   "/leads": "리드 인박스",
   "/calendar": "캘린더",
   "/customers": "고객사",
+  "/customers/drive": "구글 드라이브로 보기",
   "/influencers": "인플루언서 서치",
   "/influencers/groups": "인플루언서 그룹",
   "/creator-search": "크리에이터 탐색",
