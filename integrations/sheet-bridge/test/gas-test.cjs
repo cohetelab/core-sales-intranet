@@ -78,9 +78,32 @@ const send = (e, updates, user = "u") => e.call({ token: T, action: "update", us
   const e = makeEnv(fixture());
   const bad = ["99", "-1", "2", "3", "abc", "4.5"].map(row => send(e, [upd(e, 4, { row })]).results[0].reason);
   ok("행 범위를 벗어나면 bad_row", bad.every(x => x === "bad_row"), `(${bad.join(",")})`);
-  ok("값이 너무 길면 too_long", send(e, [upd(e, 4, { col: "메모", expect: "", value: "가".repeat(2001) })]).results[0].reason === "too_long");
+  ok("값이 너무 길면 too_long(5000자 초과)", send(e, [upd(e, 4, { col: "메모", expect: "", value: "가".repeat(5001) })]).results[0].reason === "too_long");
+  ok("5000자까지는 허용", send(e, [upd(e, 4, { col: "메모", expect: "", value: "가".repeat(5000) })]).results[0].ok === true);
   ok("update 빈 배열/없음 → bad_updates", send(e, []).error === "bad_updates" && e.call({ token: T, action: "update" }).error === "bad_updates");
   ok("1001건 초과 → bad_updates", send(e, Array(1001).fill(upd(e, 4))).error === "bad_updates");
+}
+{
+  // 상담 기록: 한 행에 서로 다른 칸을 서로 다른 값으로 한 번에 쓴다(칸 이름에 공백이 있어도 맞춘다)
+  const e = makeEnv(fixture());
+  const r = e.data.rows[3];
+  const base = { row: 4, stamp: r[0], phone: r[2].replace(/\D/g, "") };
+  const note = "[11.06 14:30 Ian] 첫 통화\n가격 문의";
+  const res = send(e, [
+    { ...base, col: "1차 상담 내용", expect: "", value: note },
+    { ...base, col: "다음 액션 플랜", expect: "", value: "견적 발송" },
+    { ...base, col: "가능성", expect: "", value: "30%" },
+    { ...base, col: "최근 연락일", expect: "", value: "2026. 11. 6." },
+    { ...base, col: "리터치 일정", expect: "", value: "2026. 11. 10." },
+  ], "이익재(Ian)");
+  ok("상담 기록 5칸을 한 번에 기록", res.ok && res.results.every(x => x.ok));
+  ok("줄바꿈이 든 상담 내용도 그대로 저장", e.data.rows[3][14] === note && e.data.rows[3][15] === "견적 발송" && e.data.rows[3][11] === "30%");
+  const log = e.sheets.find(s => s.name === "인트라넷_기록");
+  ok("칸마다 기록 1줄(5줄 + 헤더)", log.rows.length === 6 && log.rows.slice(1).every(l => l[1] === "이익재(Ian)" && l[7] === "ok"));
+  // 폼을 연 뒤 다른 사람이 상담 내용을 먼저 고친 경우: 기준값(expect)이 달라서 거절
+  e.data.rows[3][14] = "다른 사람이 쓴 상담 내용";
+  const stale = send(e, [{ ...base, col: "1차 상담 내용", expect: note, value: note + "\n[11.06 15:00 Ian] 추가" }]);
+  ok("폼을 연 뒤 시트가 바뀌면 conflict(덮어쓰지 않음)", stale.results[0].reason === "conflict" && e.data.rows[3][14] === "다른 사람이 쓴 상담 내용");
 }
 {
   const e = makeEnv(fixture(450)); // 450명 일괄 배정

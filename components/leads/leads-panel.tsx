@@ -4,7 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 import {
   AlertCircleIcon,
-  ArrowRightLeftIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ExternalLinkIcon,
@@ -40,6 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AddCustomerDialog } from "@/components/customers/add-customer-dialog";
+import { ContractDialog } from "@/components/leads/contract-dialog";
 import { LeadDetailSheet } from "@/components/leads/lead-detail-sheet";
 import { LeadImportDialog } from "@/components/leads/lead-import-dialog";
 import { MetaSheetDialog } from "@/components/leads/meta-sheet-dialog";
@@ -183,8 +183,8 @@ export function LeadsPanel() {
     if (sheetMode) await sheet.assign(ids, owner);
     else localAssign(ids, owner);
   }
-  function convertToContract(id: string) {
-    if (sheetMode) void sheet.convert(id);
+  function convertToContract(id: string, amount?: number) {
+    if (sheetMode) void sheet.convert(id, amount);
     else moveStage(id, "won");
   }
 
@@ -555,25 +555,7 @@ export function LeadsPanel() {
                         {c.nextStep ?? "-"}
                       </TableCell>
                       <TableCell className="text-center">
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-8 text-xs" aria-label={`${c.company} 계약으로 전환`}>
-                              <ArrowRightLeftIcon className="size-3.5" /> 계약 전환
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>{c.company}을(를) 계약으로 전환할까요?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                리드 목록에서 빠지고 고객사의 &lsquo;계약&rsquo; 단계로 넘어갑니다. 활동 기록과 문의 이력은 그대로 따라갑니다.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>취소</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => convertToContract(c.id)}>계약으로 전환</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <ContractDialog company={c.company} askAmount={sheetMode} onConfirm={(amount) => convertToContract(c.id, amount)} />
                       </TableCell>
                     </TableRow>
                   );
@@ -590,6 +572,9 @@ export function LeadsPanel() {
           row={detailId ? sheet.meta[detailId]?.row : undefined}
           sheetUrl={sheet.sheetUrl}
           gid={sheet.gid}
+          raw={detailId ? sheet.meta[detailId]?.raw : undefined}
+          user={sheet.user}
+          onRecord={sheet.record}
           onClose={() => setDetailId(null)}
         />
       )}

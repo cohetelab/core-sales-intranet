@@ -1,5 +1,6 @@
 import { parseCsv } from "./csv";
 import { SALES_REPS, UNASSIGNED } from "./sales-reps";
+import type { FieldKey } from "./lead-fields";
 import type { Activity, Customer, DealStage } from "./types";
 
 // 홈페이지·메타 문의가 쌓이는 구글 시트(CSV)를 리드로 바꾼다.
@@ -27,6 +28,7 @@ export type LeadRowRef = {
   phone: string; // '연락처' 칸의 숫자만
   owner: string; // '담당자' 칸의 원문(충돌 검사용)
   stage: string; // '단계' 칸의 원문
+  raw: Partial<Record<FieldKey, string>>; // 인트라넷이 기록하는 수기 칸의 원문(저장 시 충돌 검사용)
 };
 
 export type LeadRecord = {
@@ -267,6 +269,15 @@ export function parseInquiryRows(rows: string[][], trackRows = true): LeadParseR
         phone: phoneRaw.replace(/\D/g, ""),
         owner: get(row, "owner"),
         stage: get(row, "stage"),
+        raw: {
+          consult: get(row, "consult"),
+          nextAction: get(row, "nextAction"),
+          probability: get(row, "probability"),
+          lastContact: get(row, "lastContact"),
+          retouch: get(row, "retouch"),
+          memo: get(row, "memo"),
+          contract: get(row, "contract"),
+        },
       });
     }
     rec.company = company || rec.company;

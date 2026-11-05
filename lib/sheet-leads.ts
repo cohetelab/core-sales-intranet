@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { FIELD_LABEL, type FieldKey } from "@/lib/lead-fields";
 import { UNASSIGNED } from "@/lib/sales-reps";
 import type { Customer } from "@/lib/types";
 
@@ -32,10 +33,13 @@ const CODE_TEXT: Record<string, string> = {
   not_configured: "시트 연동 설정이 없습니다",
 };
 
+// 시트에서 가장 최근 문의 행 번호와 그 행의 수기 칸 원문(기록 폼의 기준값)
+export type LeadMeta = { row: number; raw: Partial<Record<FieldKey, string>> };
+
 type ListResponse = {
   user: string;
   customers: Customer[];
-  meta: Record<string, { row: number }>;
+  meta: Record<string, LeadMeta>;
   fetchedAt: string;
   sheetUrl: string;
   gid: number;
@@ -45,7 +49,7 @@ export function useSheetLeads() {
   const [status, setStatus] = React.useState<SheetStatus>("checking");
   const [user, setUser] = React.useState<string | null>(null);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
-  const [meta, setMeta] = React.useState<Record<string, { row: number }>>({});
+  const [meta, setMeta] = React.useState<Record<string, LeadMeta>>({});
   const [sheetUrl, setSheetUrl] = React.useState("");
   const [gid, setGid] = React.useState(0);
   const [fetchedAt, setFetchedAt] = React.useState<string | null>(null);
@@ -89,6 +93,7 @@ export function useSheetLeads() {
       setFetchedAt(data.fetchedAt);
       setNotice((n) => (n?.source === "load" ? null : n));
       setStatus("ready");
+      return data;
     } catch {
       setNotice({ kind: "error", source: "load", text: "서버에 연결하지 못했습니다" });
       setStatus(hasData.current ? "ready" : "error");
@@ -169,7 +174,7 @@ export function useSheetLeads() {
 
   // 시트에 쓰는 공통 처리: 화면에 먼저 반영 → 서버 → 거절된 고객만 되돌리기 → 시트 다시 읽기
   const write = React.useCallback(
-    async (path: string, body: Record<string, unknown>, ids: string[], apply: (c: Customer) => Customer) => {
+    async (path: string, body: Record<string, unknown>, ids: string[], apply: (c: Customer) => Customer): Promise<Record<string, unknown> | null> => {
       const target = new Set(ids);
       const before = new Map(customers.filter((c) => target.has(c.id)).map((c) => [c.id, c]));
       pending.current++;
@@ -190,10 +195,12 @@ export function useSheetLeads() {
           const reasons = Array.from(new Set(failed.map(([, r]) => REASON_TEXT[r.reason ?? ""] ?? "시트에 반영하지 못했습니다")));
           setNotice({ kind: "error", source: "write", text: `${failed.length}건을 시트에 쓰지 못했습니다 — ${reasons.join(" · ")}` });
         }
+        return data as Record<string, unknown>;
       } catch (e) {
         setCustomers((prev) => prev.map((c) => (before.has(c.id) ? (before.get(c.id) as Customer) : c)));
         const code = e instanceof Error ? e.message : "";
         setNotice({ kind: "error", source: "write", text: `시트에 쓰지 못했습니다 — ${CODE_TEXT[code] ?? REASON_TEXT[code] ?? "잠시 뒤에 다시 시도해 주세요"}` });
+        return null;
       } finally {
         pending.current--;
         await load("now");
@@ -217,14 +224,56 @@ export function useSheetLeads() {
     [write]
   );
 
+  // 계약 전환(선택: 계약 금액). 단계는 모든 문의 행에, 금액은 가장 최근 행에 기록된다.
   const convert = React.useCallback(
-    (id: string) => write("/api/leads/convert", { id }, [id], (c) => ({ ...c, stage: "won" as const })),
+    async (id: string, amount?: number) => {
+      const data = await write("/api/leads/convert", amount ? { id, amount } : { id }, [id], (c) => ({ ...c, stage: "won" as const }));
+      const contract = data?.contract as { ok: boolean; reason?: string } | undefined;
+      if (contract && !contract.ok) {
+        setNotice({ kind: "error", source: "write", text: `계약으로 전환했지만 계약 금액은 쓰지 못했습니다 — ${REASON_TEXT[contract.reason ?? ""] ?? "시트에 반영하지 못했습니다"}` });
+      }
+    },
     [write]
+  );
+
+  // 상담 기록: 폼을 열었을 때의 칸 원문(base)과 함께 보낸다. 그 사이 시트에서 바뀐 칸은 덮어쓰지 않고 알려 준다.
+  const record = React.useCallback(
+    async (
+      id: string,
+      changes: Partial<Record<FieldKey, string>>,
+      base: Partial<Record<FieldKey, string>>
+    ): Promise<{ ok: boolean; message?: string; raw?: Partial<Record<FieldKey, string>> }> => {
+      setNotice(null);
+      try {
+        const res = await fetch("/api/leads/record", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, changes, base }) });
+        const data = (await res.json().catch(() => ({}))) as { results?: Record<string, { ok: boolean; reason?: string }>; error?: string; code?: string; field?: string };
+        if (res.status === 401) {
+          setStatus("login");
+          return { ok: false, message: REASON_TEXT.login };
+        }
+        if (!res.ok || !data.results) {
+          if (data.error === "bad_field") return { ok: false, message: `입력값을 확인해 주세요 (${FIELD_LABEL[data.field as FieldKey] ?? data.field})` };
+          return { ok: false, message: CODE_TEXT[data.code ?? ""] ?? "시트에 쓰지 못했습니다" };
+        }
+        const failed = Object.entries(data.results).filter(([, r]) => !r.ok);
+        const fresh = await load("now");
+        if (failed.length) {
+          return {
+            ok: false,
+            message: failed.map(([k, r]) => `${FIELD_LABEL[k as FieldKey] ?? k}: ${REASON_TEXT[r.reason ?? ""] ?? "반영하지 못했습니다"}`).join(" · "),
+          };
+        }
+        return { ok: true, raw: fresh?.meta[id]?.raw };
+      } catch {
+        return { ok: false, message: "서버에 연결하지 못했습니다" };
+      }
+    },
+    [load]
   );
 
   return {
     status, user, customers, meta, sheetUrl, gid, fetchedAt, refreshing, notice,
     dismissNotice: () => setNotice(null),
-    refresh, login, logout, assign, convert,
+    refresh, login, logout, assign, convert, record,
   };
 }

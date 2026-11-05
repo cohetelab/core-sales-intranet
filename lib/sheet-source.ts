@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
+import { FIELD_COLUMN, FIELD_KEYS, type FieldKey } from "@/lib/lead-fields";
 import { parseInquiryRows, recordToCustomer, type LeadRecord } from "@/lib/lead-sheet";
 import { UNASSIGNED } from "@/lib/sales-reps";
 import type { Customer } from "@/lib/types";
@@ -57,7 +58,8 @@ async function call(body: Record<string, unknown>): Promise<Record<string, unkno
 
 export type Snapshot = {
   customers: Customer[];
-  meta: Record<string, { row: number }>; // 고객 id → 시트에서 가장 최근 문의 행(시트에서 보기 링크용)
+  // 고객 id → 시트에서 가장 최근 문의 행(시트에서 보기 링크용)과 그 행의 수기 칸 원문(기록 폼의 기준값)
+  meta: Record<string, { row: number; raw: Partial<Record<FieldKey, string>> }>;
   records: Map<string, LeadRecord>; // 서버 안에서만 쓴다(쓰기 때 행 확인)
   fetchedAt: string;
   sheetUrl: string;
@@ -82,10 +84,15 @@ export async function getSnapshot(options: { fresh?: boolean; maxAgeMs?: number 
   const records = new Map(parsed.records.map((r) => [r.id, r]));
   const customers = parsed.records.map((r) => recordToCustomer(r, fetchedAt));
   const meta: Snapshot["meta"] = {};
-  for (const r of parsed.records) meta[r.id] = { row: r.rowRefs[r.rowRefs.length - 1]?.row ?? 0 };
+  for (const r of parsed.records) {
+    const last = r.rowRefs[r.rowRefs.length - 1];
+    const raw: Partial<Record<FieldKey, string>> = {};
+    for (const k of FIELD_KEYS) if (last?.raw[k]?.trim()) raw[k] = last.raw[k];
+    meta[r.id] = { row: last?.row ?? 0, raw };
+  }
   const sheetUrl = typeof data.sheetUrl === "string" ? data.sheetUrl : "";
   const gid = typeof data.gid === "number" ? data.gid : 0;
-  const etag = createHash("sha1").update(JSON.stringify(customers)).update(sheetUrl).digest("hex").slice(0, 20);
+  const etag = createHash("sha1").update(JSON.stringify(customers)).update(JSON.stringify(meta)).update(sheetUrl).digest("hex").slice(0, 20);
 
   const value: Snapshot = { customers, meta, records, fetchedAt, sheetUrl, gid, etag };
   cache = { at: Date.now(), value };
@@ -143,3 +150,47 @@ export const assignOwners = (ids: string[], owner: string, user: string) =>
   writeColumn(ids, "담당자", owner === UNASSIGNED ? "" : owner, user);
 
 export const setContract = (ids: string[], user: string) => writeColumn(ids, "단계", "계약", user);
+
+export type FieldResult = { ok: boolean; reason?: string };
+
+// 상담 기록처럼 고객의 "가장 최근 문의 행"에 쓰는 칸들. base는 사용자가 폼을 열었을 때 보던 칸의 원문이다.
+// 쓰는 순간 시트의 칸이 base와 다르면(그 사이 누가 고쳤으면) 덮어쓰지 않고 conflict로 돌려준다.
+export async function writeFields(
+  id: string,
+  changes: Partial<Record<FieldKey, string>>,
+  base: Partial<Record<FieldKey, string>> | null,
+  user: string
+): Promise<Record<string, FieldResult>> {
+  const snap = await getSnapshot({ fresh: true });
+  const rec = snap.records.get(id);
+  const ref = rec?.rowRefs[rec.rowRefs.length - 1];
+  const results: Record<string, FieldResult> = {};
+  if (!rec || !ref) {
+    for (const k of Object.keys(changes)) results[k] = { ok: false, reason: "not_found" };
+    return results;
+  }
+  const updates: CellUpdate[] = [];
+  const keys: FieldKey[] = [];
+  for (const k of FIELD_KEYS) {
+    const value = changes[k];
+    if (value === undefined) continue;
+    const current = ref.raw[k] ?? "";
+    const expect = base ? (base[k] ?? "") : current;
+    if (value.trim() === current.trim() && expect.trim() === current.trim()) {
+      results[k] = { ok: true }; // 이미 같은 값
+      continue;
+    }
+    updates.push({ row: ref.row, stamp: ref.stamp, phone: ref.phone, col: FIELD_COLUMN[k], expect, value });
+    keys.push(k);
+  }
+  try {
+    if (updates.length) {
+      const data = await call({ action: "update", user, updates });
+      const list = Array.isArray(data.results) ? (data.results as { index: number; ok: boolean; reason?: string }[]) : [];
+      for (const r of list) results[keys[r.index]] = r.ok ? { ok: true } : { ok: false, reason: r.reason ?? "failed" };
+    }
+  } finally {
+    invalidateSnapshot();
+  }
+  return results;
+}

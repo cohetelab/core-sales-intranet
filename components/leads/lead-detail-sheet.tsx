@@ -3,9 +3,11 @@
 import * as React from "react";
 import { ExternalLinkIcon } from "lucide-react";
 
+import { LeadRecordForm, type RecordResult } from "@/components/leads/lead-record-form";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatDateTime } from "@/lib/format";
+import type { FieldKey } from "@/lib/lead-fields";
 import type { Customer } from "@/lib/types";
 
 // 시트 연동 모드에서 리드를 눌렀을 때 오른쪽에 열리는 상세. (고객 상세 화면은 브라우저 저장 고객만 다룬다)
@@ -14,12 +16,18 @@ export function LeadDetailSheet({
   row,
   sheetUrl,
   gid,
+  raw,
+  user,
+  onRecord,
   onClose,
 }: {
   customer: Customer | null;
   row?: number;
   sheetUrl: string;
   gid: number;
+  raw?: Partial<Record<FieldKey, string>>; // 시트에서 가장 최근 문의 행의 수기 칸 원문
+  user: string | null;
+  onRecord: (id: string, changes: Partial<Record<FieldKey, string>>, base: Partial<Record<FieldKey, string>>) => Promise<RecordResult>;
   onClose: () => void;
 }) {
   // 서버가 준 주소라도 구글 시트 주소일 때만 링크로 보여준다.
@@ -61,6 +69,14 @@ export function LeadDetailSheet({
                 <a href={sheetLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
                   시트에서 이 행 보기 <ExternalLinkIcon className="size-3" />
                 </a>
+              )}
+              {raw && user && (
+                <LeadRecordForm
+                  key={customer.id}
+                  raw={raw}
+                  user={user}
+                  onSave={(changes, base) => onRecord(customer.id, changes, base)}
+                />
               )}
               <div>
                 <h3 className="mb-2 text-xs font-medium text-muted-foreground">문의·활동 이력</h3>

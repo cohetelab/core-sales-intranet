@@ -16,7 +16,7 @@
 var LOG_SHEET = '인트라넷_기록';
 var WRITABLE = ['담당자', '단계', '가능성', '최근연락일', '리터치일정', '1차상담내용', '다음액션플랜', '계약금액', '메모'];
 var MAX_UPDATES = 1000;
-var MAX_VALUE_LENGTH = 2000;
+var MAX_VALUE_LENGTH = 5000; // 상담 내용을 이어 붙여 쌓는 칸이 있어서 넉넉하게
 
 function norm_(s) {
   return String(s == null ? '' : s).replace(/\s+/g, '').toLowerCase();
