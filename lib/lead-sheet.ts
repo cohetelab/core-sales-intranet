@@ -1,6 +1,6 @@
 import { parseCsv } from "./csv";
 import { SALES_REPS, UNASSIGNED } from "./sales-reps";
-import type { Activity, Customer } from "./types";
+import type { Activity, Customer, DealStage } from "./types";
 
 // 홈페이지·메타 문의가 쌓이는 구글 시트(CSV)를 리드로 바꾼다.
 // 시트는 맨 위에 메모·연도 구분 행이 있고 헤더가 그 아래라서 헤더 행을 직접 찾는다.
@@ -18,6 +18,15 @@ export type LeadInquiry = {
   channel: LeadChannel;
   budget?: string;
   text?: string;
+};
+
+// 시트의 한 문의 행. 시트에 쓸 때 "정확히 이 행이 맞는지" 확인하는 데 쓴다(행 번호만 믿지 않는다).
+export type LeadRowRef = {
+  row: number; // 1부터 시작하는 시트 행 번호
+  stamp: string; // '날짜' 칸의 원문
+  phone: string; // '연락처' 칸의 숫자만
+  owner: string; // '담당자' 칸의 원문(충돌 검사용)
+  stage: string; // '단계' 칸의 원문
 };
 
 export type LeadRecord = {
@@ -38,6 +47,8 @@ export type LeadRecord = {
   contractAmount?: string;
   failed?: boolean;
   memo?: string;
+  stage?: DealStage; // 시트 '단계' 칸에서 읽은 값(없으면 리드)
+  rowRefs: LeadRowRef[]; // 시트에서 직접 읽었을 때만 채워진다
 };
 
 export type LeadParseStats = {
@@ -175,7 +186,12 @@ function isYearMarker(row: string[]) {
 }
 
 export function parseInquirySheet(text: string): LeadParseResult {
-  const rows = parseCsv(text.replace(/^\uFEFF/, ""));
+  // CSV 파일은 빈 행이 걸러져서 행 번호가 시트와 어긋난다. 그래서 행 참조는 만들지 않는다.
+  return parseInquiryRows(parseCsv(text.replace(/^\uFEFF/, "")), false);
+}
+
+// 시트 값을 그대로(빈 행 포함) 받아 파싱한다. trackRows면 각 문의가 시트의 몇 번째 행인지 함께 기록한다.
+export function parseInquiryRows(rows: string[][], trackRows = true): LeadParseResult {
   const headerIdx = rows.findIndex((r) => {
     const cells = r.map(norm);
     return ALIASES.company.some((a) => cells.includes(a)) && (ALIASES.phone.some((a) => cells.includes(a)) || ALIASES.date.some((a) => cells.includes(a)));
@@ -200,6 +216,7 @@ export function parseInquirySheet(text: string): LeadParseResult {
   const get = (row: string[], key: ColKey) => (col[key] === undefined ? "" : (row[col[key] as number] ?? "").trim());
 
   rows.slice(headerIdx + 1).forEach((row, i) => {
+    if (!row.some((c) => c.trim())) return; // 빈 행
     if (row.map(norm).join("") === header.join("")) return; // 반복된 헤더
     if (isYearMarker(row)) return; // 연도 구분 행
     stats.rows++;
@@ -241,8 +258,17 @@ export function parseInquirySheet(text: string): LeadParseResult {
     const existing = groups.get(key);
     stats.imported++;
     if (existing) stats.mergedRows++;
-    const rec: LeadRecord = existing ?? { id, company, phone, email, services: [], channel, inquiries: [], owner: null };
+    const rec: LeadRecord = existing ?? { id, company, phone, email, services: [], channel, inquiries: [], owner: null, rowRefs: [] };
     rec.inquiries.push(inquiry);
+    if (trackRows) {
+      rec.rowRefs.push({
+        row: headerIdx + 1 + i + 1,
+        stamp: get(row, "date"),
+        phone: phoneRaw.replace(/\D/g, ""),
+        owner: get(row, "owner"),
+        stage: get(row, "stage"),
+      });
+    }
     rec.company = company || rec.company;
     rec.phone = phoneValid ? phone : rec.phone || phone;
     rec.email = email || rec.email;
@@ -259,7 +285,11 @@ export function parseInquirySheet(text: string): LeadParseResult {
     rec.probability = clean(get(row, "probability")).replace(/%+$/, "%") || rec.probability;
     rec.contractAmount = clean(get(row, "contract")) || rec.contractAmount;
     rec.memo = clean(get(row, "memo")) || rec.memo;
-    if (/실패|종료/.test(clean(get(row, "stage")))) rec.failed = true;
+    const stageText = clean(get(row, "stage"));
+    if (/실패|종료/.test(stageText)) rec.failed = true;
+    if (/계약/.test(stageText)) rec.stage = "won";
+    else if (rec.stage !== "won" && /제안/.test(stageText)) rec.stage = "proposal";
+    else if (!rec.stage && /상담/.test(stageText)) rec.stage = "discovery";
     groups.set(key, rec);
   });
 
@@ -305,7 +335,7 @@ export function recordToCustomer(r: LeadRecord, nowIso = new Date().toISOString(
     company: r.company || "상호 미기재",
     category: r.services.length ? r.services.join(" · ") : "미분류",
     website: "-",
-    stage: "lead",
+    stage: r.stage ?? "lead",
     dealValueMonthly: 0,
     source: "inbound",
     owner,

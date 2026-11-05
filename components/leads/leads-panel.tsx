@@ -7,6 +7,8 @@ import {
   ArrowRightLeftIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ExternalLinkIcon,
+  LogOutIcon,
   RefreshCw,
   SearchIcon,
   ShuffleIcon,
@@ -38,8 +40,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AddCustomerDialog } from "@/components/customers/add-customer-dialog";
+import { LeadDetailSheet } from "@/components/leads/lead-detail-sheet";
 import { LeadImportDialog } from "@/components/leads/lead-import-dialog";
 import { MetaSheetDialog } from "@/components/leads/meta-sheet-dialog";
+import { SheetLoginCard } from "@/components/leads/sheet-login-card";
 import { SOURCE_LABEL } from "@/lib/mock-data";
 import { useCustomerStore } from "@/lib/customer-store";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -53,6 +57,7 @@ import {
   type MetaSheetConfig,
 } from "@/lib/meta-leads";
 import { OWNER_OPTIONS, SALES_REPS, UNASSIGNED } from "@/lib/sales-reps";
+import { useSheetLeads } from "@/lib/sheet-leads";
 import type { Customer } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -84,7 +89,12 @@ const channelOf = (c: Customer) =>
   c.tags.find((t) => (CHANNELS as readonly string[]).includes(t)) ?? SOURCE_LABEL[c.source];
 
 export function LeadsPanel() {
-  const { customers, addCustomer, assignOwner, moveStage } = useCustomerStore();
+  const { customers: localCustomers, addCustomer, assignOwner: localAssign, moveStage } = useCustomerStore();
+  const sheet = useSheetLeads();
+  // 구글 시트 연동이 설정돼 있으면 시트가 원본이다. 아니면 지금까지처럼 브라우저 저장소 + CSV 가져오기로 동작한다.
+  const sheetMode = sheet.status !== "off" && sheet.status !== "checking";
+  const customers = sheetMode ? sheet.customers : localCustomers;
+  const [detailId, setDetailId] = React.useState<string | null>(null);
   const [sheetConfig, setSheetConfig] = React.useState<MetaSheetConfig | null>(null);
   const [syncing, setSyncing] = React.useState(false);
   const [syncMessage, setSyncMessage] = React.useState<string | null>(null);
@@ -169,8 +179,17 @@ export function LeadsPanel() {
     });
   }
 
+  async function assignOwner(ids: string[], owner: string) {
+    if (sheetMode) await sheet.assign(ids, owner);
+    else localAssign(ids, owner);
+  }
+  function convertToContract(id: string) {
+    if (sheetMode) void sheet.convert(id);
+    else moveStage(id, "won");
+  }
+
   function assignSelected() {
-    assignOwner(Array.from(selected), bulkOwner);
+    void assignOwner(Array.from(selected), bulkOwner);
     setSelected(new Set());
   }
 
@@ -185,8 +204,8 @@ export function LeadsPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [filtered, loadByRep]
   );
-  function runBalancedAssignment() {
-    for (const rep of SALES_REPS) assignOwner(balancedPlan[rep], rep);
+  async function runBalancedAssignment() {
+    for (const rep of SALES_REPS) await assignOwner(balancedPlan[rep], rep);
   }
 
   function handleSaveSheet(url: string) {
@@ -250,6 +269,28 @@ export function LeadsPanel() {
     }
   }
 
+  if (sheet.status === "checking") {
+    return <p className="py-10 text-center text-sm text-muted-foreground">연결을 확인하는 중…</p>;
+  }
+  if (sheet.status === "login") return <SheetLoginCard onLogin={sheet.login} />;
+  if (sheet.status === "loading") {
+    return <p className="py-10 text-center text-sm text-muted-foreground">시트에서 리드를 불러오는 중…</p>;
+  }
+  if (sheet.status === "error") {
+    return (
+      <Card className="mx-auto w-full max-w-md shadow-xs">
+        <CardContent className="space-y-3 text-center">
+          <p className="text-sm font-medium">시트를 불러오지 못했습니다</p>
+          <p role="alert" className="text-xs text-muted-foreground">{sheet.notice?.text ?? "잠시 뒤에 다시 시도해 주세요"}</p>
+          <Button variant="outline" size="sm" onClick={() => void sheet.refresh()}>
+            다시 시도
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+  const detail = sheetMode && detailId ? (customers.find((c) => c.id === detailId) ?? null) : null;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -257,30 +298,79 @@ export function LeadsPanel() {
           아직 상담이 시작되지 않은 신규 리드 · 총 {leads.length.toLocaleString("ko-KR")}건
           {filtered.length !== leads.length && <> · 조건에 맞는 {filtered.length.toLocaleString("ko-KR")}건</>}
         </p>
-        <div className="flex flex-wrap gap-2">
-          <LeadImportDialog />
-          <MetaSheetDialog
-            currentUrl={sheetConfig?.url ?? null}
-            onSave={handleSaveSheet}
-            onDisconnect={handleDisconnectSheet}
-          />
-          <Button
-            variant="outline"
-            className="h-9 py-2"
-            disabled={!sheetConfig || syncing}
-            onClick={handleSync}
-            title={
-              sheetConfig
-                ? "메타 잠재고객 시트에서 신규 리드 가져오기"
-                : "먼저 메타 시트를 연동해주세요"
-            }
-          >
-            <RefreshCw className={`size-3.5 ${syncing ? "animate-spin" : ""}`} />
-            새로고침
-          </Button>
-          <AddCustomerDialog triggerLabel="리드 추가" />
-        </div>
+        {sheetMode ? (
+          <div className="flex flex-wrap gap-2">
+            {sheet.sheetUrl.startsWith("https://docs.google.com/") && (
+              <Button asChild variant="outline" className="h-9 py-2">
+                <a href={sheet.sheetUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLinkIcon className="size-3.5" /> 시트 열기
+                </a>
+              </Button>
+            )}
+            <Button variant="outline" className="h-9 py-2" disabled={sheet.refreshing} onClick={() => void sheet.refresh()}>
+              <RefreshCw className={`size-3.5 ${sheet.refreshing ? "animate-spin" : ""}`} />
+              새로고침
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <LeadImportDialog />
+            <MetaSheetDialog
+              currentUrl={sheetConfig?.url ?? null}
+              onSave={handleSaveSheet}
+              onDisconnect={handleDisconnectSheet}
+            />
+            <Button
+              variant="outline"
+              className="h-9 py-2"
+              disabled={!sheetConfig || syncing}
+              onClick={handleSync}
+              title={
+                sheetConfig
+                  ? "메타 잠재고객 시트에서 신규 리드 가져오기"
+                  : "먼저 메타 시트를 연동해주세요"
+              }
+            >
+              <RefreshCw className={`size-3.5 ${syncing ? "animate-spin" : ""}`} />
+              새로고침
+            </Button>
+            <AddCustomerDialog triggerLabel="리드 추가" />
+          </div>
+        )}
       </div>
+
+      {sheetMode && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <span className="size-1.5 rounded-full bg-emerald-500" />
+            구글 시트 연동 · 시트가 원본입니다
+          </span>
+          {sheet.fetchedAt && <span>· 마지막 확인 {formatDateTime(sheet.fetchedAt)}</span>}
+          <span>· 30초마다 새로 확인</span>
+          {sheet.user && (
+            <span className="flex items-center gap-1">
+              · {sheet.user}
+              <button type="button" onClick={() => void sheet.logout()} className="inline-flex items-center gap-0.5 underline hover:text-foreground">
+                <LogOutIcon className="size-3" /> 나가기
+              </button>
+            </span>
+          )}
+        </div>
+      )}
+      {sheetMode && sheet.notice && (
+        <div
+          role="alert"
+          className={cn(
+            "flex items-start justify-between gap-3 rounded-2xl px-3 py-2 text-xs",
+            sheet.notice.kind === "error" ? "bg-destructive/10 text-destructive" : "bg-muted text-foreground"
+          )}
+        >
+          <span>{sheet.notice.text}</span>
+          <button type="button" onClick={sheet.dismissNotice} className="shrink-0 underline">
+            닫기
+          </button>
+        </div>
+      )}
 
       {sheetConfig && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -350,7 +440,7 @@ export function LeadsPanel() {
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>취소</AlertDialogCancel>
-                    <AlertDialogAction onClick={runBalancedAssignment}>배분하기</AlertDialogAction>
+                    <AlertDialogAction onClick={() => void runBalancedAssignment()}>배분하기</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
@@ -388,7 +478,7 @@ export function LeadsPanel() {
           {leads.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-12 text-center">
               <p className="text-sm text-muted-foreground">등록된 리드가 없습니다</p>
-              <p className="text-xs text-muted-foreground">오른쪽 위 &lsquo;CSV 가져오기&rsquo;로 문의 시트를 불러오세요.</p>
+              {!sheetMode && <p className="text-xs text-muted-foreground">오른쪽 위 &lsquo;CSV 가져오기&rsquo;로 문의 시트를 불러오세요.</p>}
             </div>
           ) : filtered.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted-foreground">조건에 맞는 리드가 없습니다</div>
@@ -420,9 +510,15 @@ export function LeadsPanel() {
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground tabular-nums">{formatDate(c.createdAt, "YY.MM.DD")}</TableCell>
                       <TableCell className="font-medium">
-                        <Link href={`/customers?id=${c.id}`} className="hover:underline">
-                          {c.company}
-                        </Link>
+                        {sheetMode ? (
+                          <button type="button" onClick={() => setDetailId(c.id)} className="text-left hover:underline">
+                            {c.company}
+                          </button>
+                        ) : (
+                          <Link href={`/customers?id=${c.id}`} className="hover:underline">
+                            {c.company}
+                          </Link>
+                        )}
                         {note.length > 0 && (
                           <div className="mt-0.5 flex flex-wrap gap-1">
                             {note.map((t) => (
@@ -439,7 +535,7 @@ export function LeadsPanel() {
                         <Badge variant="outline">{channelOf(c)}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Select value={c.owner} onValueChange={(v) => assignOwner([c.id], v)}>
+                        <Select value={c.owner} onValueChange={(v) => void assignOwner([c.id], v)}>
                           <SelectTrigger
                             className={cn("h-8 w-40 text-xs", c.owner === UNASSIGNED && "text-amber-700")}
                             aria-label={`${c.company} 담당 영업`}
@@ -474,7 +570,7 @@ export function LeadsPanel() {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>취소</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => moveStage(c.id, "won")}>계약으로 전환</AlertDialogAction>
+                              <AlertDialogAction onClick={() => convertToContract(c.id)}>계약으로 전환</AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
@@ -487,6 +583,16 @@ export function LeadsPanel() {
           )}
         </CardContent>
       </Card>
+
+      {sheetMode && (
+        <LeadDetailSheet
+          customer={detail}
+          row={detailId ? sheet.meta[detailId]?.row : undefined}
+          sheetUrl={sheet.sheetUrl}
+          gid={sheet.gid}
+          onClose={() => setDetailId(null)}
+        />
+      )}
 
       {filtered.length > PAGE_SIZE && (
         <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
