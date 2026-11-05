@@ -31,7 +31,8 @@ export async function GET(req: Request) {
   } catch (error) {
     // 시트 서버의 내부 문구는 내보내지 않고 분류만 알려 준다.
     const code = error instanceof SheetError ? error.code : "server_error";
-    console.error("leads: sheet read failed", code);
-    return NextResponse.json({ error: "sheet_error", code }, { status: 502 });
+    const detail = error instanceof SheetError && error.message !== error.code ? error.message : undefined;
+    console.error("leads: sheet read failed", code, detail ?? "");
+    return NextResponse.json({ error: "sheet_error", code, detail }, { status: 502 });
   }
 }

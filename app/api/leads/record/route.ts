@@ -52,7 +52,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ results: await writeFields(body.id, changes, base, user) });
   } catch (error) {
     const code = error instanceof SheetError ? error.code : "server_error";
+    const detail = error instanceof SheetError && error.message !== error.code ? error.message : undefined;
     console.error("leads: record failed", code);
-    return NextResponse.json({ error: "sheet_error", code }, { status: 502 });
+    return NextResponse.json({ error: "sheet_error", code, detail }, { status: 502 });
   }
 }

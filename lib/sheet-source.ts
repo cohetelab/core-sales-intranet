@@ -51,8 +51,12 @@ async function call(body: Record<string, unknown>): Promise<Record<string, unkno
     throw new SheetError("unreachable");
   }
   if (!res.ok) throw new SheetError("upstream", `HTTP ${res.status}`);
+  // 구글이 JSON이 아니라 HTML(로그인 요청·오류 화면)을 돌려주면 웹 앱 배포 설정(액세스: 모든 사용자)이나 URL이 잘못된 것이다.
   const data = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!data || data.ok !== true) throw new SheetError(typeof data?.error === "string" ? data.error : "bad_response");
+  if (!data || data.ok !== true) {
+    const detail = typeof data?.message === "string" ? data.message.slice(0, 160) : undefined;
+    throw new SheetError(typeof data?.error === "string" ? data.error : "bad_response", detail);
+  }
   return data;
 }
 

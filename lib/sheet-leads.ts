@@ -23,13 +23,21 @@ const REASON_TEXT: Record<string, string> = {
   not_writable: "쓸 수 없는 칸입니다",
   login: "다시 로그인해 주세요",
 };
+// 서버가 알려 준 오류를 사람이 읽는 문구 + (원인 코드: 설명)으로 만든다. 코드가 없으면 HTTP 상태를 보여 준다.
+function describeError(fallback: string, status: number, data: { code?: string; detail?: string }) {
+  const base = CODE_TEXT[data.code ?? ""] ?? fallback;
+  const tag = data.code ? `${data.code}${data.detail ? `: ${data.detail}` : ""}` : `HTTP ${status}`;
+  return `${base} (${tag})`;
+}
+
 const CODE_TEXT: Record<string, string> = {
   unauthorized: "시트 연결 토큰이 맞지 않습니다(설정 확인 필요)",
   unreachable: "시트 서버에 연결하지 못했습니다",
   upstream: "시트 서버가 오류를 돌려줬습니다",
   parse: "시트 형식을 읽지 못했습니다(헤더 확인 필요)",
   no_header: "시트에서 헤더 행을 찾지 못했습니다",
-  bad_response: "시트 응답이 올바르지 않습니다",
+  bad_response: "시트 서버가 데이터를 돌려주지 않았습니다 — 웹 앱 배포의 액세스가 '모든 사용자'인지, 주소가 /exec 로 끝나는지 확인하세요",
+  server_error: "시트 스크립트에서 오류가 났습니다",
   not_configured: "시트 연동 설정이 없습니다",
 };
 
@@ -77,8 +85,8 @@ export function useSheetLeads() {
         return setStatus("ready");
       }
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { code?: string };
-        setNotice({ kind: "error", source: "load", text: CODE_TEXT[data.code ?? ""] ?? "시트를 불러오지 못했습니다" });
+        const data = (await res.json().catch(() => ({}))) as { code?: string; detail?: string };
+        setNotice({ kind: "error", source: "load", text: describeError("시트를 불러오지 못했습니다", res.status, data) });
         return setStatus(hasData.current ? "ready" : "error");
       }
       const data = (await res.json()) as ListResponse;
