@@ -62,6 +62,7 @@ import type { Customer } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
+const CSV_MODE_KEY = "core-sales-leads-csv-mode";
 const UNCLASSIFIED = "미분류";
 
 type ServiceFilter = "all" | (typeof SERVICE_LABELS)[number] | typeof UNCLASSIFIED;
@@ -91,8 +92,27 @@ const channelOf = (c: Customer) =>
 export function LeadsPanel() {
   const { customers: localCustomers, addCustomer, assignOwner: localAssign, moveStage } = useCustomerStore();
   const sheet = useSheetLeads();
-  // 구글 시트 연동이 설정돼 있으면 시트가 원본이다. 아니면 지금까지처럼 브라우저 저장소 + CSV 가져오기로 동작한다.
-  const sheetMode = sheet.status !== "off" && sheet.status !== "checking";
+  // CSV 방식: 구글 시트 연동이 설정돼 있어도 시트를 CSV 파일로 내려받아 올려서 쓸 수 있다(선택은 이 브라우저에 기억한다).
+  const [csvMode, setCsvMode] = React.useState(false);
+  React.useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCsvMode(window.localStorage.getItem(CSV_MODE_KEY) === "1");
+    } catch {
+      // 저장소를 못 쓰면 기본값(구글 연동)으로 둔다
+    }
+  }, []);
+  function chooseCsvMode(on: boolean) {
+    setCsvMode(on);
+    try {
+      if (on) window.localStorage.setItem(CSV_MODE_KEY, "1");
+      else window.localStorage.removeItem(CSV_MODE_KEY);
+    } catch {
+      // 무시
+    }
+  }
+  // 구글 시트 연동이 설정돼 있고 CSV 방식을 고르지 않았으면 시트가 원본이다. 아니면 브라우저 저장소 + CSV 가져오기로 동작한다.
+  const sheetMode = !csvMode && sheet.status !== "off" && sheet.status !== "checking";
   const customers = sheetMode ? sheet.customers : localCustomers;
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [sheetConfig, setSheetConfig] = React.useState<MetaSheetConfig | null>(null);
@@ -269,14 +289,14 @@ export function LeadsPanel() {
     }
   }
 
-  if (sheet.status === "checking") {
+  if (!csvMode && sheet.status === "checking") {
     return <p className="py-10 text-center text-sm text-muted-foreground">연결을 확인하는 중…</p>;
   }
-  if (sheet.status === "login") return <SheetLoginCard onLogin={sheet.login} />;
-  if (sheet.status === "loading") {
+  if (!csvMode && sheet.status === "login") return <SheetLoginCard onLogin={sheet.login} onUseCsv={() => chooseCsvMode(true)} />;
+  if (!csvMode && sheet.status === "loading") {
     return <p className="py-10 text-center text-sm text-muted-foreground">시트에서 리드를 불러오는 중…</p>;
   }
-  if (sheet.status === "error") {
+  if (!csvMode && sheet.status === "error") {
     return (
       <Card className="mx-auto w-full max-w-md shadow-xs">
         <CardContent className="space-y-3 text-center">
@@ -285,6 +305,9 @@ export function LeadsPanel() {
           <Button variant="outline" size="sm" onClick={() => void sheet.refresh()}>
             다시 시도
           </Button>
+          <button type="button" onClick={() => chooseCsvMode(true)} className="block w-full text-center text-xs text-muted-foreground underline hover:text-foreground">
+            구글 시트 연동 없이 CSV 파일로 가져오기
+          </button>
         </CardContent>
       </Card>
     );
@@ -339,6 +362,14 @@ export function LeadsPanel() {
         )}
       </div>
 
+      {csvMode && sheet.status !== "off" && (
+        <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+          <span>지금은 CSV 파일로 가져오는 방식입니다(이 브라우저에만 저장).</span>
+          <button type="button" onClick={() => chooseCsvMode(false)} className="underline hover:text-foreground">
+            구글 시트 연동으로 돌아가기
+          </button>
+        </div>
+      )}
       {sheetMode && (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
@@ -347,6 +378,9 @@ export function LeadsPanel() {
           </span>
           {sheet.fetchedAt && <span>· 마지막 확인 {formatDateTime(sheet.fetchedAt)}</span>}
           <span>· 30초마다 새로 확인</span>
+          <button type="button" onClick={() => chooseCsvMode(true)} className="underline hover:text-foreground">
+            CSV 방식으로 전환
+          </button>
           {sheet.user && (
             <span className="flex items-center gap-1">
               · {sheet.user}

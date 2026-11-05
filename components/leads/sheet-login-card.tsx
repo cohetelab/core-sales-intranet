@@ -11,7 +11,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SALES_REPS } from "@/lib/sales-reps";
 
 // 시트 연동 모드의 입구. 공용 비밀번호와 "나는 누구"를 고르면 들어간다(이름은 시트 수정 기록에 남는다).
-export function SheetLoginCard({ onLogin }: { onLogin: (passcode: string, name: string) => Promise<string | null> }) {
+export function SheetLoginCard({
+  onLogin,
+  onUseCsv,
+}: {
+  onLogin: (passcode: string, name: string) => Promise<string | null>;
+  onUseCsv?: () => void;
+}) {
   const [name, setName] = React.useState<string>(SALES_REPS[0]);
   const [passcode, setPasscode] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -66,6 +72,11 @@ export function SheetLoginCard({ onLogin }: { onLogin: (passcode: string, name: 
           <Button type="submit" className="w-full" disabled={!passcode || busy}>
             {busy ? "확인하는 중…" : "들어가기"}
           </Button>
+          {onUseCsv && (
+            <button type="button" onClick={onUseCsv} className="w-full text-center text-xs text-muted-foreground underline hover:text-foreground">
+              구글 시트 연동 없이 CSV 파일로 가져오기
+            </button>
+          )}
         </form>
       </CardContent>
     </Card>
