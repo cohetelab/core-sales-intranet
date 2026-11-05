@@ -17,6 +17,7 @@ import { useInfluencerStore } from "@/lib/influencer-store";
 import { EditInfluencerDialog } from "@/components/influencers/edit-influencer-dialog";
 import { DeleteInfluencerDialog } from "@/components/influencers/delete-influencer-dialog";
 import { AddToGroupDialog } from "@/components/influencers/add-to-group-dialog";
+import { InfluencerAvatar } from "@/components/influencers/influencer-avatar";
 
 export function InfluencerDetailDialog({
   influencer,
@@ -35,7 +36,8 @@ export function InfluencerDetailDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-1.5">
+          <DialogTitle className="flex items-center gap-2">
+            <InfluencerAvatar influencer={c} className="size-12" />
             @{c.handle}
             <button
               type="button"
@@ -52,7 +54,7 @@ export function InfluencerDetailDialog({
           </DialogTitle>
           <DialogDescription>
             <a
-              href={`https://instagram.com/${c.handle}`}
+              href={c.platform === "tiktok" ? `https://www.tiktok.com/@${encodeURIComponent(c.handle)}` : `https://www.instagram.com/${encodeURIComponent(c.handle)}/`}
               target="_blank"
               rel="noreferrer"
             >
@@ -115,7 +117,7 @@ export function InfluencerDetailDialog({
           />
           <div className="flex gap-2">
             <AddToGroupDialog influencer={c} />
-            <EditInfluencerDialog influencer={c} />
+            <EditInfluencerDialog influencer={c} trigger={<button type="button" className="inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium hover:bg-accent">사진·정보 수정</button>} />
           </div>
         </DialogFooter>
       </DialogContent>

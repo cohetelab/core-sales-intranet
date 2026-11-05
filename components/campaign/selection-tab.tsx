@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { CheckIcon, SearchIcon, UsersIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, SearchIcon, UsersIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,9 @@ export function SelectionTab({ campaign, influencers, onUpdate, onConfirmed }: P
   const [query, setQuery] = React.useState("");
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState<CampaignBrief>(campaign.brief ?? { product: "", goal: "", audience: "", message: "" });
+  const [publishing, setPublishing] = React.useState(false);
+  const [shareUrl, setShareUrl] = React.useState("");
+  const [shareError, setShareError] = React.useState("");
   const pool = influencers.filter((creator) => !creator.optOut);
   const brief = campaign.brief;
   const briefText = [brief?.product, brief?.audience, brief?.message].filter(Boolean).join(" ");
@@ -61,6 +64,43 @@ export function SelectionTab({ campaign, influencers, onUpdate, onConfirmed }: P
       selectionConfirmed: false,
     }));
   };
+
+  async function publishShare() {
+    setPublishing(true);
+    setShareError("");
+    setShareUrl("");
+    try {
+      const response = await fetch("/api/shares", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          campaignId: campaign.id,
+          campaignName: campaign.name,
+          brand: campaign.brand,
+          product: campaign.brief?.product ?? "",
+          goal: campaign.brief?.goal ?? "",
+          message: campaign.brief?.message ?? "",
+          creators: selected.map((creator) => ({
+            handle: creator.handle,
+            platform: creator.platform,
+            profileImageUrl: creator.profileImageUrl ?? "",
+            followers: creator.followers,
+            engagementRate: creator.engagementRate,
+            avgViews: creator.avgViews,
+            category: creator.category,
+            bio: creator.bio,
+          })),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(response.status === 401 ? "전달 링크 관리에서 관리자 로그인 후 다시 발행해 주세요." : result.error ?? "링크 발행에 실패했습니다.");
+      const url = `${window.location.origin}/share/${result.share.id}`;
+      setShareUrl(url);
+      try { await navigator.clipboard.writeText(url); } catch { /* 주소는 아래에 계속 표시 */ }
+    } catch (cause) {
+      setShareError(cause instanceof Error ? cause.message : "링크 발행에 실패했습니다.");
+    } finally { setPublishing(false); }
+  }
 
   return (
     <div className="space-y-4">
@@ -195,16 +235,20 @@ export function SelectionTab({ campaign, influencers, onUpdate, onConfirmed }: P
             <p className="text-xs text-muted-foreground">최근 평균 조회 합계 {totalViews.toLocaleString()} · 보장 조회수가 아닙니다</p>
             <p className="text-xs text-muted-foreground">입력한 협의 단가 합계 {formatKRW(totalFee)}</p>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+          {campaign.selectionConfirmed && selected.length > 0 && <Button variant="outline" disabled={publishing} onClick={publishShare}><CopyIcon className="size-4" /> {publishing ? "발행 중…" : "전달용 링크 발행"}</Button>}
           <Button
-            disabled={selected.length === 0}
+            disabled={selected.length === 0 || campaign.selectionConfirmed === true}
             onClick={() => {
               onUpdate((current) => ({ ...current, selectionConfirmed: true }));
               onConfirmed();
             }}
           >
-            인플루언서 선정 완료
+            {campaign.selectionConfirmed ? "선정 확정됨" : "인플루언서 선정 완료"}
           </Button>
+          </div>
         </CardContent>
+        {(shareError || shareUrl) && <div className="border-t px-6 pb-3 text-xs"><p className={shareError ? "text-destructive" : "text-emerald-700"}>{shareError || "전달 링크를 발행했습니다. URL을 복사해 전달하세요."}</p>{shareError && <Link href="/share-admin" className="mt-1 inline-block underline">전달 링크 관리로 이동</Link>}{shareUrl && <a href={shareUrl} target="_blank" rel="noopener noreferrer" className="mt-1 block break-all underline">{shareUrl}</a>}</div>}
       </Card>
     </div>
   );

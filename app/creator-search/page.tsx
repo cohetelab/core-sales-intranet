@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRightIcon,
@@ -13,9 +14,9 @@ import {
   ImageIcon,
   InfoIcon,
   LockIcon,
-  MailIcon,
   MoreHorizontalIcon,
   PlusIcon,
+  PencilIcon,
   RotateCcwIcon,
   SearchIcon,
   SlidersHorizontalIcon,
@@ -52,6 +53,8 @@ import { useCreatorPicks, type Pick } from "@/lib/creator-pick-store";
 import { useInfluencerGroupStore } from "@/lib/influencer-group-store";
 import { useInfluencerStore } from "@/lib/influencer-store";
 import type { Influencer } from "@/lib/influencer-data";
+import { AddInfluencerDialog } from "@/components/influencers/add-influencer-dialog";
+import { EditInfluencerDialog } from "@/components/influencers/edit-influencer-dialog";
 
 type TabValue = "find" | "selected" | "rejected" | "lookalikes";
 type ResultMode = "all" | "smart";
@@ -184,8 +187,14 @@ function CreatorSearchContent() {
   const { influencers } = useInfluencerStore();
   const { picks, setPick } = useCreatorPicks();
   const irm = useCreatorIrm();
+  const { groups, createGroup, setArchived } = useInfluencerGroupStore();
+  const targetGroupId = searchParams.get("group");
+  const [activeGroupId, setActiveGroupId] = React.useState<string | null>(targetGroupId);
+  const [groupQuery, setGroupQuery] = React.useState("");
+  const [newGroupName, setNewGroupName] = React.useState("");
+  const [showArchived, setShowArchived] = React.useState(false);
 
-  const [tab, setTab] = React.useState<TabValue>("find");
+  const [tab, setTab] = React.useState<TabValue>(() => searchParams.get("tab") === "selected" ? "selected" : "find");
   const [query, setQuery] = React.useState("");
   const [filters, setFilters] = React.useState<Filters>(NO_FILTER);
   const [showMore, setShowMore] = React.useState(false);
@@ -226,6 +235,9 @@ function CreatorSearchContent() {
   }, [pool, picks, filters, query, mode, focusedCreator]);
 
   const listFor = (kind: Pick) => pool.filter((c) => picks[c.id] === kind);
+  const activeGroup = groups.find((g) => g.id === activeGroupId);
+  const selectedList = activeGroup ? pool.filter((c) => activeGroup.memberIds.includes(c.id)) : listFor("selected");
+  const visibleGroups = groups.filter((g) => Boolean(g.archivedAt) === showArchived && g.name.toLowerCase().includes(groupQuery.trim().toLowerCase()));
 
   const applyPreset = (p: (typeof PRESETS)[number]) => {
     clearFocusedCreator();
@@ -244,14 +256,15 @@ function CreatorSearchContent() {
     setFilters((f) => ({ ...f, [key]: value }));
   };
 
-  const rowProps = { picks, onPick: setPick, irm };
+  const rowProps = { picks, onPick: setPick, irm, targetGroupId };
 
   return (
     <div className="space-y-4">
-      <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="mt-1 text-sm text-muted-foreground">
           키워드, 해시태그, 유저네임으로 크리에이터를 찾고 선택·제외·컨택으로 관리합니다.
         </p>
+        <AddInfluencerDialog />
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabValue)}>
@@ -260,7 +273,7 @@ function CreatorSearchContent() {
             <CompassIcon className="size-3.5" /> 크리에이터 찾기
           </TabsTrigger>
           <TabsTrigger value="selected">
-            <UserCheckIcon className="size-3.5" /> 선택됨
+            <UserCheckIcon className="size-3.5" /> 샘플 리스트업
             <CountBadge n={selectedCount} tone="success" />
           </TabsTrigger>
           <TabsTrigger value="rejected">
@@ -273,6 +286,11 @@ function CreatorSearchContent() {
           </TabsTrigger>
         </TabsList>
       </Tabs>
+
+      {targetGroupId && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm">
+        <span>{activeGroup ? <><strong>{activeGroup.name}</strong>에 크리에이터를 담는 중 · 현재 {activeGroup.memberIds.length}명</> : "샘플 리스트를 찾을 수 없습니다."}</span>
+        <Button asChild variant="outline" size="sm"><Link href={`/sample-lists?group=${encodeURIComponent(targetGroupId)}`}>샘플 리스트로 돌아가기 <ArrowRightIcon className="size-3.5" /></Link></Button>
+      </div>}
 
       {tab === "find" && (
         <>
@@ -405,13 +423,36 @@ function CreatorSearchContent() {
         </>
       )}
 
+      {tab === "selected" && <div className="space-y-3 rounded-2xl border bg-card p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <strong className="text-sm">크리에이터 리스트</strong>
+          <Button asChild size="sm" variant="outline"><Link href={activeGroup ? `/sample-lists?group=${encodeURIComponent(activeGroup.id)}` : "/sample-lists"}>샘플 리스트 전달 화면으로 <ArrowRightIcon className="size-3.5" /></Link></Button>
+          <Button size="sm" variant={!activeGroupId ? "default" : "outline"} onClick={() => setActiveGroupId(null)}>전체 선택</Button>
+          <Button size="sm" variant={showArchived ? "outline" : "secondary"} onClick={() => setShowArchived(false)}>활성 리스트</Button>
+          <Button size="sm" variant={showArchived ? "secondary" : "outline"} onClick={() => setShowArchived(true)}>보관함</Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Input className="h-9 min-w-44 flex-1" aria-label="리스트 검색" placeholder="리스트 이름 검색" value={groupQuery} onChange={(e) => setGroupQuery(e.target.value)} />
+          <Input className="h-9 min-w-44 flex-1" aria-label="새 리스트 이름" placeholder="새 리스트 이름" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} />
+          <Button size="sm" onClick={() => { if (!newGroupName.trim()) return; const group = createGroup(newGroupName.trim()); setActiveGroupId(group.id); setNewGroupName(""); setShowArchived(false); }}><PlusIcon className="size-4" /> 리스트 생성</Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {visibleGroups.length === 0 && <span className="text-xs text-muted-foreground">{showArchived ? "보관된 리스트가 없습니다." : "리스트가 없습니다."}</span>}
+          {visibleGroups.map((group) => <div key={group.id} className="flex items-center rounded-lg border">
+            <Button size="sm" variant={activeGroupId === group.id ? "secondary" : "ghost"} onClick={() => setActiveGroupId(group.id)}>{group.name} <span className="text-muted-foreground">{group.memberIds.length}</span></Button>
+            <Button size="icon-sm" variant="ghost" aria-label={`${group.name} ${group.archivedAt ? "복원" : "보관"}`} title={group.archivedAt ? "복원" : "보관"} onClick={() => setArchived(group.id, !group.archivedAt)}><RotateCcwIcon className="size-3.5" /></Button>
+          </div>)}
+        </div>
+        {activeGroup && <p className="text-xs text-muted-foreground">{activeGroup.name} · {activeGroup.archivedAt ? "보관됨 · 열람 가능" : "카드의 그룹 메뉴에서 크리에이터를 추가하세요."}</p>}
+      </div>}
+
       {tab === "selected" &&
-        (listFor("selected").length === 0 ? (
+        (selectedList.length === 0 ? (
           <EmptyCard icon={<UserCheckIcon className="size-6 text-muted-foreground" />}>
             선택한 크리에이터가 없습니다
           </EmptyCard>
         ) : (
-          <CreatorList list={listFor("selected")} {...rowProps} />
+          <CreatorList list={selectedList} {...rowProps} />
         ))}
 
       {tab === "rejected" &&
@@ -572,7 +613,7 @@ function DiscoveryHome({ onPreset }: { onPreset: (p: (typeof PRESETS)[number]) =
   );
 }
 
-// 이름에서 색을 뽑아 프로필·썸네일 자리표시자를 만든다(실제 이미지 데이터가 없음).
+// 이름에서 색을 뽑아 사진이 없는 프로필·썸네일의 자리표시자를 만든다.
 function hueOf(id: string) {
   let h = 0;
   for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) % 360;
@@ -591,6 +632,23 @@ function PlatformDot({ platform }: { platform: Influencer["platform"] }) {
   );
 }
 
+function CreatorProfilePhoto({ creator }: { creator: Influencer }) {
+  const [failed, setFailed] = React.useState(false);
+  return creator.profileImageUrl && !failed ? (
+    <Image
+      src={creator.profileImageUrl}
+      alt={`${creator.handle} 프로필 사진`}
+      fill
+      sizes="140px"
+      unoptimized
+      className="rounded-2xl object-cover"
+      onError={() => setFailed(true)}
+    />
+  ) : (
+    <span>{creator.handle.slice(0, 2).toUpperCase()}</span>
+  );
+}
+
 type IrmApi = ReturnType<typeof useCreatorIrm>;
 
 function CreatorList({
@@ -598,11 +656,13 @@ function CreatorList({
   picks,
   onPick,
   irm,
+  targetGroupId,
 }: {
   list: Influencer[];
   picks: Record<string, Pick>;
   onPick: (id: string, pick: Pick | null) => void;
   irm: IrmApi;
+  targetGroupId: string | null;
 }) {
   const { groups, addMember, removeMember } = useInfluencerGroupStore();
 
@@ -616,6 +676,7 @@ function CreatorList({
         const hue = hueOf(c.id);
         const inIrm = Boolean(irm.entries[c.id]);
         const memberOf = groups.filter((g) => g.memberIds.includes(c.id));
+        const targetGroup = groups.find((g) => g.id === targetGroupId && !g.archivedAt);
 
         return (
           <Card key={c.id} className="py-0 shadow-xs">
@@ -627,7 +688,22 @@ function CreatorList({
                   background: `linear-gradient(135deg, hsl(${hue} 70% 62%), hsl(${(hue + 50) % 360} 70% 48%))`,
                 }}
               >
-                {c.handle.slice(0, 2).toUpperCase()}
+                <CreatorProfilePhoto key={c.profileImageUrl || c.id} creator={c} />
+                <EditInfluencerDialog
+                  influencer={c}
+                  trigger={
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon-sm"
+                      className="absolute top-2 right-2 z-10 rounded-full shadow-sm"
+                      aria-label={`${c.handle} 프로필 사진·정보 수정`}
+                      title="사진·정보 수정"
+                    >
+                      <PencilIcon className="size-3.5" />
+                    </Button>
+                  }
+                />
                 <div className="absolute inset-x-5 -bottom-3 flex h-8 overflow-hidden rounded-2xl bg-background shadow-md ring-1 ring-foreground/5">
                   <button
                     type="button"
@@ -665,40 +741,6 @@ function CreatorList({
                   <div className="flex shrink-0 items-center gap-1.5">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="gap-1" aria-label="그룹">
-                          <UsersIcon className="size-3.5" />
-                          {memberOf.length > 0 && (
-                            <span className="text-xs tabular-nums">{memberOf.length}</span>
-                          )}
-                          <ChevronDownIcon className="size-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="min-w-48">
-                        <DropdownMenuLabel>그룹에 추가</DropdownMenuLabel>
-                        {groups.length === 0 ? (
-                          <p className="px-2 py-2 text-xs text-muted-foreground">
-                            그룹이 없습니다. 인플루언서 그룹에서 먼저 만드세요.
-                          </p>
-                        ) : (
-                          groups.map((g) => {
-                            const isMember = g.memberIds.includes(c.id);
-                            return (
-                              <DropdownMenuItem
-                                key={g.id}
-                                onSelect={() =>
-                                  isMember ? removeMember(g.id, c.id) : addMember(g.id, c.id)
-                                }
-                              >
-                                <span className="flex-1 truncate">{g.name}</span>
-                                {isMember && <CheckIcon className="size-3.5" />}
-                              </DropdownMenuItem>
-                            );
-                          })
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="icon-sm" aria-label="더보기">
                           <MoreHorizontalIcon />
                         </Button>
@@ -734,23 +776,11 @@ function CreatorList({
 
               <span className="hidden h-24 w-px bg-border @7xl/main:block" />
 
-              {/* 최근 게시물 자리표시자 */}
-              <div className="hidden shrink-0 gap-2 @7xl/main:flex" aria-hidden>
+              {/* 등록된 게시물 이미지만 표시 */}
+              <div className="hidden shrink-0 gap-2 @7xl/main:flex">
                 {[0, 1, 2].map((i) => (
-                  <div
-                    key={i}
-                    className="relative flex h-24 w-[86px] items-center justify-center rounded-xl"
-                    style={{
-                      background: `linear-gradient(160deg, hsl(${(hue + i * 40) % 360} 45% 85%), hsl(${
-                        (hue + i * 40 + 30) % 360
-                      } 45% 72%))`,
-                    }}
-                  >
-                    <ImageIcon className="size-5 text-white/80" />
-                    <span className="absolute top-1 right-1">
-                      <PlatformDot platform={c.platform} />
-                    </span>
-                  </div>
+                  c.recentPosts?.[i] ? <a key={i} href={c.recentPosts[i].url} target="_blank" rel="noopener noreferrer" className="relative block h-24 w-[86px] overflow-hidden rounded-xl bg-muted" aria-label={`${c.handle} 게시물 ${i + 1} 열기`}><Image src={c.recentPosts[i].thumbnailUrl} alt={`${c.handle} 게시물 ${i + 1}`} fill unoptimized className="object-cover" /></a>
+                  : <div key={i} className="flex h-24 w-[86px] items-center justify-center rounded-xl bg-muted text-muted-foreground"><ImageIcon className="size-5" /></div>
                 ))}
               </div>
 
@@ -768,6 +798,7 @@ function CreatorList({
                   <span className="text-xs">평균 조회</span>
                   <span>{c.avgViews ? formatCount(c.avgViews) : "-"}</span>
                 </div>
+                {c.extraMetrics?.filter((m) => m.platform !== c.platform).map((m) => <div key={m.platform} className="border-t pt-1 text-xs"><span className="uppercase">{m.platform}</span> {formatCount(m.followers)} · ER {m.engagementRate}% · 조회 {m.avgViews == null ? "—" : formatCount(m.avgViews)}</div>)}
               </div>
 
               {/* 카테고리 */}
@@ -786,9 +817,34 @@ function CreatorList({
                 )}
               </div>
 
-              {/* 컨택 */}
+              {/* 그룹과 IRM에 각각 등록 */}
+              <div className="ml-auto flex shrink-0 flex-wrap gap-2">
+              {targetGroup && <Button type="button" variant={targetGroup.memberIds.includes(c.id) ? "secondary" : "default"} onClick={() => {
+                if (targetGroup.memberIds.includes(c.id)) removeMember(targetGroup.id, c.id);
+                else { addMember(targetGroup.id, c.id); onPick(c.id, "selected"); }
+              }}>{targetGroup.memberIds.includes(c.id) ? <><CheckIcon className="size-4" /> 리스트에 담김</> : <><PlusIcon className="size-4" /> 리스트에 담기</>}</Button>}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="w-36" aria-label={`${c.handle} 그룹에 추가하기`}>
+                    <PlusIcon className="size-4" /> 그룹에 추가하기
+                    {memberOf.length > 0 && <span className="text-xs tabular-nums">{memberOf.length}</span>}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-52">
+                  <DropdownMenuLabel>추가할 그룹 선택</DropdownMenuLabel>
+                  {groups.filter((g) => !g.archivedAt).length === 0 ? (
+                    <DropdownMenuItem asChild><Link href="/influencers/groups">그룹 만들러 가기</Link></DropdownMenuItem>
+                  ) : groups.filter((g) => !g.archivedAt).map((g) => {
+                    const isMember = g.memberIds.includes(c.id);
+                    return <DropdownMenuItem key={g.id} onSelect={() => {
+                      if (isMember) removeMember(g.id, c.id);
+                      else { addMember(g.id, c.id); onPick(c.id, "selected"); }
+                    }}><span className="flex-1 truncate">{g.name}</span>{isMember && <CheckIcon className="size-3.5" />}</DropdownMenuItem>;
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
-                className="ml-auto w-36 shrink-0"
+                className="w-36 shrink-0"
                 variant={inIrm ? "outline" : "default"}
                 onClick={() => {
                   if (inIrm) return;
@@ -806,10 +862,11 @@ function CreatorList({
                   </Link>
                 ) : (
                   <>
-                    <MailIcon /> 컨택
+                    <UsersIcon /> IRM에 추가
                   </>
                 )}
               </Button>
+              </div>
             </CardContent>
           </Card>
         );

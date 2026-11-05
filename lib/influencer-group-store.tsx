@@ -11,6 +11,7 @@ export type InfluencerGroup = {
   memberIds: string[];
   createdAt: string;
   linkedCustomerId?: string;
+  archivedAt?: string;
 };
 
 const initialGroups: InfluencerGroup[] = [];
@@ -23,6 +24,7 @@ type InfluencerGroupStoreContextValue = {
     linkedCustomerId?: string
   ) => InfluencerGroup;
   deleteGroup: (id: string) => void;
+  setArchived: (id: string, archived: boolean) => void;
   addMember: (groupId: string, influencerId: string) => void;
   removeMember: (groupId: string, influencerId: string) => void;
   getOrCreateForCustomer: (
@@ -93,6 +95,12 @@ export function InfluencerGroupStoreProvider({
     setGroups((prev) => prev.filter((g) => g.id !== id));
   }, []);
 
+  const setArchived = React.useCallback((id: string, archived: boolean) => {
+    setGroups((prev) => prev.map((g) => g.id === id ? {
+      ...g, archivedAt: archived ? new Date().toISOString() : undefined,
+    } : g));
+  }, []);
+
   const addMember = React.useCallback((groupId: string, influencerId: string) => {
     setGroups((prev) =>
       prev.map((g) =>
@@ -137,6 +145,7 @@ export function InfluencerGroupStoreProvider({
       groups,
       createGroup,
       deleteGroup,
+      setArchived,
       addMember,
       removeMember,
       getOrCreateForCustomer,
@@ -145,6 +154,7 @@ export function InfluencerGroupStoreProvider({
       groups,
       createGroup,
       deleteGroup,
+      setArchived,
       addMember,
       removeMember,
       getOrCreateForCustomer,

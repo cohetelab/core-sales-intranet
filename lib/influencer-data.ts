@@ -3,6 +3,10 @@ export type InfluencerPlatform = "instagram" | "tiktok";
 export type Influencer = {
   id: string;
   handle: string;
+  profileImageUrl?: string;
+  country?: string;
+  recentPosts?: { url: string; thumbnailUrl: string }[];
+  extraMetrics?: { platform: "instagram" | "tiktok" | "youtube"; followers: number; engagementRate: number; avgViews: number | null }[];
   platform: InfluencerPlatform;
   followers: number;
   engagementRate: number;

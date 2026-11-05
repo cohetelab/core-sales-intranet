@@ -78,6 +78,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
     items: [
       { title: "인플루언서 서치", url: "/influencers", icon: <SearchIcon /> },
       { title: "크리에이터 탐색", url: "/creator-search", icon: <CompassIcon /> },
+      { title: "샘플 리스트 전달", url: "/sample-lists", icon: <ClipboardListIcon /> },
       { title: "전달 링크 관리", url: "/share-admin", icon: <FolderIcon /> },
       { title: "커뮤니티(IRM)", url: "/creator-irm", icon: <HeartHandshakeIcon /> },
       { title: "인플루언서 그룹", url: "/influencers/groups", icon: <FolderIcon /> },

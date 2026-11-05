@@ -50,8 +50,9 @@ import {
 } from "@/lib/creator-irm-store";
 import { useInfluencerGroupStore } from "@/lib/influencer-group-store";
 import { useInfluencerStore } from "@/lib/influencer-store";
+import { InfluencerAvatar } from "@/components/influencers/influencer-avatar";
 
-type ColumnKey = "status" | "owner" | "list" | "tags" | "platform" | "lastContact";
+type ColumnKey = "status" | "owner" | "list" | "tags" | "platform" | "country" | "addedAt" | "lastContact";
 
 const COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "status", label: "상태" },
@@ -59,16 +60,12 @@ const COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "list", label: "리스트" },
   { key: "tags", label: "태그" },
   { key: "platform", label: "플랫폼" },
+  { key: "country", label: "국가" },
+  { key: "addedAt", label: "추가일" },
   { key: "lastContact", label: "마지막 컨택일" },
 ];
 
 const NO_LIST = "__none__";
-
-function hueOf(id: string) {
-  let h = 0;
-  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) % 360;
-  return h;
-}
 
 export default function CreatorIrmPage() {
   const { influencers } = useInfluencerStore();
@@ -125,7 +122,7 @@ export default function CreatorIrmPage() {
     <div className="space-y-4 pb-16">
       <div>
         <p className="mt-1 text-sm text-muted-foreground">
-          인플루언서 관계 관리(IRM) · 컨택한 크리에이터의 상태, 담당자, 리스트, 태그를 관리합니다.
+          인플루언서 관계 관리(IRM) · 등록한 크리에이터의 상태, 담당자, 리스트, 태그를 관리합니다.
         </p>
       </div>
 
@@ -158,8 +155,9 @@ export default function CreatorIrmPage() {
           onClick={() => irm.markContacted(contactTargets)}
         >
           <MailIcon className="size-3.5" />
-          {checked.size > 0 ? `선택 컨택 (${checked.size})` : "전체 컨택"}
+          {checked.size > 0 ? `선택 컨택 기록 (${checked.size})` : "전체 컨택 기록"}
         </Button>
+        <span className="text-xs text-muted-foreground">메시지는 발송되지 않고 상태·날짜만 기록됩니다.</span>
 
         <div className="ml-auto">
           <DropdownMenu>
@@ -201,7 +199,7 @@ export default function CreatorIrmPage() {
                 커뮤니티에 담긴 크리에이터가 없습니다
               </p>
               <Button asChild variant="outline" className="h-9 py-2">
-                <Link href="/creator-search">크리에이터 탐색에서 컨택하기</Link>
+                <Link href="/creator-search">크리에이터 탐색에서 등록하기</Link>
               </Button>
             </div>
           ) : rows.length === 0 ? (
@@ -225,12 +223,13 @@ export default function CreatorIrmPage() {
                   {show("list") && <TableHead>리스트</TableHead>}
                   {show("tags") && <TableHead>태그</TableHead>}
                   {show("platform") && <TableHead>플랫폼</TableHead>}
+                  {show("country") && <TableHead>국가</TableHead>}
+                  {show("addedAt") && <TableHead>추가일</TableHead>}
                   {show("lastContact") && <TableHead>마지막 컨택일</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map(({ entry, creator }) => {
-                  const hue = hueOf(creator.id);
                   const list = groupOf(creator.id);
                   return (
                     <TableRow key={entry.id}>
@@ -243,16 +242,7 @@ export default function CreatorIrmPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2.5">
-                          <span
-                            className="flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-                            style={{
-                              background: `linear-gradient(135deg, hsl(${hue} 70% 62%), hsl(${
-                                (hue + 50) % 360
-                              } 70% 48%))`,
-                            }}
-                          >
-                            {creator.handle.slice(0, 2).toUpperCase()}
-                          </span>
+                          <InfluencerAvatar influencer={creator} className="size-7" />
                           <span className="font-medium">{creator.handle}</span>
                         </div>
                       </TableCell>
@@ -306,7 +296,7 @@ export default function CreatorIrmPage() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value={NO_LIST}>—</SelectItem>
-                              {groups.map((g) => (
+                              {groups.filter((g) => !g.archivedAt || g.id === list?.id).map((g) => (
                                 <SelectItem key={g.id} value={g.id}>
                                   {g.name}
                                 </SelectItem>
@@ -362,6 +352,8 @@ export default function CreatorIrmPage() {
                           {creator.platform === "instagram" ? "Instagram" : "TikTok"}
                         </TableCell>
                       )}
+                      {show("country") && <TableCell className="text-muted-foreground">{creator.country || "—"}</TableCell>}
+                      {show("addedAt") && <TableCell className="text-muted-foreground tabular-nums">{dayjs(entry.addedAt).format("YYYY.MM.DD")}</TableCell>}
                       {show("lastContact") && (
                         <TableCell className="text-muted-foreground tabular-nums">
                           {entry.lastContactAt

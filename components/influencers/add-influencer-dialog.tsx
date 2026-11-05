@@ -25,9 +25,12 @@ import {
 } from "@/components/ui/select";
 import { PLATFORM_LABEL, type InfluencerPlatform } from "@/lib/influencer-data";
 import { useInfluencerStore, type InfluencerInput } from "@/lib/influencer-store";
+import { InfluencerPhotoField, isValidPhotoSource } from "@/components/influencers/influencer-photo-field";
 
 const emptyForm = {
   handle: "",
+  profileImageUrl: "",
+  country: "",
   platform: "instagram" as InfluencerPlatform,
   followers: "",
   engagementRate: "",
@@ -41,12 +44,19 @@ export function AddInfluencerDialog() {
   const { addInfluencer } = useInfluencerStore();
   const [open, setOpen] = React.useState(false);
   const [form, setForm] = React.useState(emptyForm);
+  const [photoError, setPhotoError] = React.useState("");
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.handle.trim()) return;
+    if (!isValidPhotoSource(form.profileImageUrl.trim())) {
+      setPhotoError("http 또는 https 사진 URL을 입력해 주세요.");
+      return;
+    }
     const input: InfluencerInput = {
       handle: form.handle.trim().replace(/^@/, ""),
+      profileImageUrl: form.profileImageUrl.trim(),
+      country: form.country.trim(),
       platform: form.platform,
       followers: Number(form.followers) || 0,
       engagementRate: Number(form.engagementRate) || 0,
@@ -63,6 +73,7 @@ export function AddInfluencerDialog() {
     };
     addInfluencer(input);
     setForm(emptyForm);
+    setPhotoError("");
     setOpen(false);
   }
 
@@ -73,7 +84,7 @@ export function AddInfluencerDialog() {
           <Plus className="size-3.5" /> 크리에이터 추가
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>새 크리에이터 추가</DialogTitle>
@@ -82,6 +93,17 @@ export function AddInfluencerDialog() {
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 space-y-3">
+            <InfluencerPhotoField
+              id="inf-photo"
+              handle={form.handle}
+              value={form.profileImageUrl}
+              onChange={(value) => { setForm((f) => ({ ...f, profileImageUrl: value })); setPhotoError(""); }}
+            />
+            {photoError && <p className="text-xs text-destructive" role="alert">{photoError}</p>}
+            <div className="space-y-1.5">
+              <Label htmlFor="inf-country">국가</Label>
+              <Input id="inf-country" value={form.country} onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))} placeholder="예: 대한민국" />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="inf-handle">핸들 *</Label>

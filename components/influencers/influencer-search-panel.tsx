@@ -34,6 +34,7 @@ import {
 import { useInfluencerStore } from "@/lib/influencer-store";
 import { useInfluencerGroupStore } from "@/lib/influencer-group-store";
 import { AddInfluencerDialog } from "@/components/influencers/add-influencer-dialog";
+import { InfluencerAvatar } from "@/components/influencers/influencer-avatar";
 import { InfluencerDetailDialog } from "@/components/influencers/influencer-detail-dialog";
 import { BulkAddToGroupDialog } from "@/components/influencers/bulk-add-to-group-dialog";
 
@@ -53,6 +54,10 @@ export function InfluencerSearchPanel() {
   const searchParams = useSearchParams();
   const targetGroupId = searchParams.get("group");
   const targetGroup = groups.find((g) => g.id === targetGroupId) ?? null;
+  const fromSampleLists = searchParams.get("source") === "sample-lists";
+  const groupReturnUrl = fromSampleLists && targetGroupId
+    ? `/sample-lists?group=${encodeURIComponent(targetGroupId)}`
+    : "/influencers/groups";
 
   const [query, setQuery] = React.useState("");
   const [platform, setPlatform] = React.useState<InfluencerPlatform | typeof ALL>(
@@ -135,14 +140,14 @@ export function InfluencerSearchPanel() {
         <div className="flex items-center justify-between gap-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
           <div className="flex items-center gap-2 text-primary">
             <Link
-              href="/influencers/groups"
+              href={groupReturnUrl}
               className="flex items-center gap-1 text-xs text-muted-foreground hover:underline"
             >
-              <ArrowLeft className="size-3" /> 그룹으로
+              <ArrowLeft className="size-3" /> {fromSampleLists ? "샘플 리스트로" : "그룹으로"}
             </Link>
             <span>
               {targetGroup
-                ? `"${targetGroup.name}" 그룹에 담는 중`
+                ? `"${targetGroup.name}" ${fromSampleLists ? "샘플 리스트" : "그룹"}에 담는 중 · 현재 ${targetGroup.memberIds.length}명`
                 : "그룹을 찾을 수 없습니다"}
             </span>
           </div>
@@ -322,7 +327,12 @@ export function InfluencerSearchPanel() {
                         />
                       </span>
                     </TableCell>
-                    <TableCell className="font-medium">@{c.handle}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <InfluencerAvatar influencer={c} className="size-8" />
+                        <span>@{c.handle}</span>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-center">
                       <Badge variant="outline">{PLATFORM_LABEL[c.platform]}</Badge>
                     </TableCell>

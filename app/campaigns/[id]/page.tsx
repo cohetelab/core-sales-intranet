@@ -63,6 +63,7 @@ export default function CampaignDetailPage() {
             </p>
           </div>
         </div>
+        <Button asChild variant="outline" size="sm"><Link href="/share-admin">전달 링크 관리</Link></Button>
       </div>
 
       <Tabs value={visibleTab} onValueChange={(v) => setTab(v as TabValue)}>
@@ -89,7 +90,7 @@ export default function CampaignDetailPage() {
           campaign={campaign}
           influencers={influencers}
           onUpdate={(fn) => update(campaign.id, fn)}
-          onConfirmed={() => setTab("progress")}
+          onConfirmed={() => setTab("selection")}
         />
       )}
       {visibleTab === "progress" && (
