@@ -6,8 +6,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
-import { CustomerStoreProvider } from "@/lib/customer-store";
 import { AgentDockPanel, AgentDockProvider } from "@/components/agent-dock";
+import { CustomerStoreProvider } from "@/lib/customer-store";
 import { InfluencerStoreProvider } from "@/lib/influencer-store";
 import { InfluencerGroupStoreProvider } from "@/lib/influencer-group-store";
 
@@ -17,10 +17,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <InfluencerStoreProvider>
         <InfluencerGroupStoreProvider>
           <TooltipProvider delayDuration={0}>
+            <AgentDockProvider>
             <SidebarProvider
               style={
                 {
-            <AgentDockProvider>
                   // 아이콘 레일(4rem) + 소메뉴 패널(15rem)
                   "--sidebar-width": "calc(var(--spacing) * 76)",
                   "--header-height": "calc(var(--spacing) * 12)",
@@ -41,12 +41,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
                   </div>
                 </div>
               </SidebarInset>
+              <AgentDockPanel />
             </SidebarProvider>
+            </AgentDockProvider>
           </TooltipProvider>
         </InfluencerGroupStoreProvider>
-              <AgentDockPanel />
       </InfluencerStoreProvider>
-            </AgentDockProvider>
     </CustomerStoreProvider>
   );
 }

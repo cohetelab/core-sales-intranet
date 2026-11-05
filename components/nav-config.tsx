@@ -125,11 +125,11 @@ export const NAV_CATEGORIES: NavCategory[] = [
       { title: "에이전트 허브", url: "/agents", icon: <BotIcon /> },
       { title: "회의실", url: "/agents/room", icon: <MessagesSquareIcon /> },
       { title: "에이전트 관리", url: "/agents/roster", icon: <UserCogIcon /> },
+      { title: "페퍼", url: "/agents/pepper", icon: <MessageCircleIcon /> },
     ],
   },
   {
     id: "work",
-      { title: "페퍼", url: "/agents/pepper", icon: <MessageCircleIcon /> },
     label: "실무",
     icon: <SproutIcon />,
     items: [
