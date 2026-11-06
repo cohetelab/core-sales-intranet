@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { AgentDockToggle } from "@/components/agent-dock";
 import { CommandPaletteTrigger } from "@/components/command-palette";
+import { ViewModeToggle } from "@/components/view-mode";
 import { pageTitle } from "@/lib/page-meta";
 
 export function SiteHeader() {
@@ -26,6 +27,7 @@ export function SiteHeader() {
           {pageTitle(pathname)}
         </h1>
         <div className="ml-auto flex items-center gap-1">
+          <ViewModeToggle />
           <CommandPaletteTrigger />
           <AgentDockToggle />
           <Button variant="ghost" size="icon" className="relative ml-auto">
