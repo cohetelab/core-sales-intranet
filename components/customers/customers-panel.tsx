@@ -18,6 +18,9 @@ import { AddCustomerDialog } from "@/components/customers/add-customer-dialog";
 import { EditCustomerDialog } from "@/components/customers/edit-customer-dialog";
 import { DeleteCustomerDialog } from "@/components/customers/delete-customer-dialog";
 import { OperationStatusBadge } from "@/components/customers/operation-status-badge";
+import { SheetCustomers } from "@/components/customers/sheet-customers";
+import { renderSheetStatus } from "@/components/leads/sheet-status-screen";
+import { useSheetLeads } from "@/components/sheet-leads-provider";
 import { SOURCE_LABEL, STAGE_LABEL, STAGE_ORDER } from "@/lib/mock-data";
 import { useCustomerStore } from "@/lib/customer-store";
 import { useInfluencerGroupStore } from "@/lib/influencer-group-store";
@@ -84,6 +87,13 @@ export function CustomersPanel() {
     );
 
   const selected = customers.find((c) => c.id === selId) ?? null;
+
+  // 구글 시트 연동이 설정돼 있고 CSV 방식을 고르지 않았으면 시트가 원본인 고객관리 화면을 쓴다.
+  // 아래 로컬 화면의 운영 상태·인플루언서 선정·세금계산서 준비는 로컬 고객 ID에 묶여 있어 시트 고객에는 쓸 수 없다.
+  const sheet = useSheetLeads();
+  const statusScreen = renderSheetStatus(sheet);
+  if (statusScreen) return statusScreen;
+  if (!sheet.csvMode && sheet.status === "ready") return <SheetCustomers sheet={sheet} />;
 
   return (
     <div className="flex flex-col gap-3">
@@ -225,6 +235,16 @@ export function CustomersPanel() {
                       }
                     >
                       <Users2Icon className="size-3.5" /> 인플루언서 선정하기
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8"
+                      disabled={selected.stage !== "won"}
+                      onClick={() => router.push(`/sales-invoices?customerId=${encodeURIComponent(selected.id)}`)}
+                      title={selected.stage !== "won" ? "계약 체결 후 발행 정보를 준비할 수 있습니다" : "매출 세금계산서 발행 정보 준비"}
+                    >
+                      세금계산서 준비
                     </Button>
                     <EditCustomerDialog customer={selected} />
                     <DeleteCustomerDialog
