@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import {
   AlertCircleIcon,
+  CalendarDaysIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ExternalLinkIcon,
@@ -44,9 +45,11 @@ import { LeadDetailSheet } from "@/components/leads/lead-detail-sheet";
 import { LeadImportDialog } from "@/components/leads/lead-import-dialog";
 import { MetaSheetDialog } from "@/components/leads/meta-sheet-dialog";
 import { renderSheetStatus } from "@/components/leads/sheet-status-screen";
-import { SOURCE_LABEL } from "@/lib/mock-data";
+import { StatGrid, type Stat } from "@/components/stat-card";
+import { SOURCE_LABEL, STAGE_LABEL } from "@/lib/mock-data";
 import { useCustomerStore } from "@/lib/customer-store";
 import { formatDateTime, formatKst } from "@/lib/format";
+import { todayKst } from "@/lib/lead-fields";
 import { CHANNELS, SERVICE_LABELS, planBalancedAssignment } from "@/lib/lead-sheet";
 import {
   clearMetaSheetConfig,
@@ -66,6 +69,29 @@ const UNCLASSIFIED = "미분류";
 
 type ServiceFilter = "all" | (typeof SERVICE_LABELS)[number] | typeof UNCLASSIFIED;
 type OwnerFilter = "all" | string;
+type StageFilter = "lead" | "discovery" | "proposal" | "won" | "all" | "failed";
+type DueFilter = "all" | "overdue" | "today" | "week";
+
+const FAILED_TAG = "실패/종료";
+const STAGE_CHIPS: { id: StageFilter; label: string }[] = [
+  { id: "all", label: "전체 단계" },
+  { id: "lead", label: "리드" },
+  { id: "discovery", label: "상담" },
+  { id: "proposal", label: "제안" },
+  { id: "won", label: "계약" },
+  { id: "failed", label: FAILED_TAG },
+];
+const DUE_CHIPS: { id: DueFilter; label: string }[] = [
+  { id: "all", label: "전체 일정" },
+  { id: "overdue", label: "지난 일정" },
+  { id: "today", label: "오늘" },
+  { id: "week", label: "이번 주(7일)" },
+];
+
+const isFailed = (c: Customer) => c.tags.includes(FAILED_TAG);
+// 리터치 일정(ISO)을 한국 날짜 "YYYY-MM-DD"로
+const dueDay = (c: Customer) => (c.nextStepDue ? new Date(new Date(c.nextStepDue).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10) : "");
+const addDays = (day: string, n: number) => new Date(new Date(`${day}T12:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
 
 const digits = (s: string) => s.replace(/\D/g, "");
 
@@ -104,6 +130,9 @@ export function LeadsPanel() {
   const [query, setQuery] = React.useState("");
   const [service, setService] = React.useState<ServiceFilter>("all");
   const [owner, setOwner] = React.useState<OwnerFilter>("all");
+  const [stage, setStage] = React.useState<StageFilter>("lead");
+  const [scheduleOnly, setScheduleOnly] = React.useState(false);
+  const [due, setDue] = React.useState<DueFilter>("all");
   const [page, setPage] = React.useState(0);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [bulkOwner, setBulkOwner] = React.useState<string>(SALES_REPS[0]);
@@ -114,12 +143,28 @@ export function LeadsPanel() {
     setSheetConfig(loadMetaSheetConfig());
   }, []);
 
-  const leads = React.useMemo(
+  // 신규 리드(리드 단계). 담당 건수 계산과 요약 카드에 쓴다.
+  const leads = React.useMemo(() => customers.filter((c) => c.stage === "lead"), [customers]);
+
+  const today = todayKst();
+  const matchesStage = (c: Customer, f: StageFilter) => (f === "all" ? true : f === "failed" ? isFailed(c) : c.stage === f);
+  const matchesDue = (c: Customer, f: DueFilter) => {
+    if (!scheduleOnly) return true;
+    const d = dueDay(c);
+    if (!d || isFailed(c)) return false;
+    if (f === "overdue") return d < today;
+    if (f === "today") return d === today;
+    if (f === "week") return d >= today && d <= addDays(today, 6);
+    return true;
+  };
+  // 단계 칩·일정관리로 좁힌 목록(표와 칩 건수의 바탕)
+  const scoped = React.useMemo(
     () =>
       customers
-        .filter((c) => c.stage === "lead")
-        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
-    [customers]
+        .filter((c) => matchesStage(c, stage) && matchesDue(c, due))
+        .sort((a, b) => (scheduleOnly ? dueDay(a).localeCompare(dueDay(b)) : a.createdAt < b.createdAt ? 1 : -1)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [customers, stage, scheduleOnly, due, today]
   );
 
   const matchesQuery = React.useCallback(
@@ -141,23 +186,58 @@ export function LeadsPanel() {
   const matchesOwner = (c: Customer, f: OwnerFilter) => f === "all" || c.owner === f;
 
   const filtered = React.useMemo(
-    () => leads.filter((c) => matchesQuery(c) && matchesService(c, service) && matchesOwner(c, owner)),
-    [leads, matchesQuery, service, owner]
+    () => scoped.filter((c) => matchesQuery(c) && matchesService(c, service) && matchesOwner(c, owner)),
+    [scoped, matchesQuery, service, owner]
   );
 
   // 칩에 보이는 건수: 다른 필터는 적용하고 자기 축은 빼서 센다.
   const serviceCounts = React.useMemo(() => {
-    const base = leads.filter((c) => matchesQuery(c) && matchesOwner(c, owner));
+    const base = scoped.filter((c) => matchesQuery(c) && matchesOwner(c, owner));
     const map = new Map<ServiceFilter, number>([["all", base.length]]);
     for (const l of [...SERVICE_LABELS, UNCLASSIFIED] as ServiceFilter[]) map.set(l, base.filter((c) => matchesService(c, l)).length);
     return map;
-  }, [leads, matchesQuery, owner]);
+  }, [scoped, matchesQuery, owner]);
   const ownerCounts = React.useMemo(() => {
-    const base = leads.filter((c) => matchesQuery(c) && matchesService(c, service));
+    const base = scoped.filter((c) => matchesQuery(c) && matchesService(c, service));
     const map = new Map<string, number>([["all", base.length]]);
     for (const o of OWNER_OPTIONS) map.set(o, base.filter((c) => c.owner === o).length);
     return map;
-  }, [leads, matchesQuery, service]);
+  }, [scoped, matchesQuery, service]);
+  const stageCounts = React.useMemo(() => {
+    const base = customers.filter((c) => matchesQuery(c) && matchesService(c, service) && matchesOwner(c, owner) && matchesDue(c, due));
+    return new Map<StageFilter, number>(STAGE_CHIPS.map((s) => [s.id, base.filter((c) => matchesStage(c, s.id)).length]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customers, matchesQuery, service, owner, scheduleOnly, due, today]);
+  const dueCounts = React.useMemo(() => {
+    const base = customers.filter((c) => matchesStage(c, stage) && matchesQuery(c) && matchesService(c, service) && matchesOwner(c, owner));
+    const days = base.filter((c) => dueDay(c) && !isFailed(c)).map(dueDay);
+    return new Map<DueFilter, number>([
+      ["all", days.length],
+      ["overdue", days.filter((d) => d < today).length],
+      ["today", days.filter((d) => d === today).length],
+      ["week", days.filter((d) => d >= today && d <= addDays(today, 6)).length],
+    ]);
+  }, [customers, stage, matchesQuery, service, owner, today]);
+
+  // 맨 위 요약 카드(실패/종료는 제외하고 센다)
+  const [nowMs] = React.useState(() => Date.now());
+  const summary = React.useMemo<Stat[]>(() => {
+    const active = customers.filter((c) => !isFailed(c));
+    const openLeads = leads.filter((c) => !isFailed(c));
+    const weekAgo = new Date(nowMs - 7 * 86400000).toISOString();
+    const dues = active.filter((c) => c.stage !== "won").map(dueDay).filter(Boolean);
+    const overdue = dues.filter((d) => d < today).length;
+    const upcoming = dues.filter((d) => d >= today && d <= addDays(today, 6)).length;
+    const n = (v: number) => v.toLocaleString("ko-KR");
+    const by = (st: Customer["stage"]) => active.filter((c) => c.stage === st).length;
+    return [
+      { label: "전체 고객", value: `${n(active.length)}건`, footerTitle: `리드 ${n(by("lead"))} · 상담 ${n(by("discovery"))} · 제안 ${n(by("proposal"))} · 계약 ${n(by("won"))}` },
+      { label: "담당자 미배정", value: `${n(openLeads.filter((c) => c.owner === UNASSIGNED).length)}건`, footerTitle: "담당 영업 배정이 필요한 신규 리드" },
+      { label: "최근 7일 신규", value: `${n(active.filter((c) => c.createdAt >= weekAgo).length)}건`, footerTitle: "지난 7일 안에 들어온 문의" },
+      { label: "리터치 예정", value: `${n(upcoming)}건`, danger: overdue > 0, footerTitle: overdue > 0 ? `지난 일정 ${n(overdue)}건` : "앞으로 7일 안의 일정", footerSub: "일정관리에서 날짜순으로 확인" },
+    ];
+  }, [customers, leads, nowMs, today]);
+
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
@@ -168,6 +248,15 @@ export function LeadsPanel() {
 
   function resetPage() {
     setPage(0);
+  }
+  function toggleSchedule() {
+    // 일정관리를 켜면 모든 단계에서 리터치 일정이 있는 고객을 날짜순으로 보여 주고, 끄면 신규 리드로 돌아간다.
+    const next = !scheduleOnly;
+    setScheduleOnly(next);
+    setDue("all");
+    setStage(next ? "all" : "lead");
+    setSelected(new Set());
+    resetPage();
   }
   function toggleAll(checked: boolean) {
     setSelected(checked ? new Set(filtered.map((c) => c.id)) : new Set());
@@ -273,17 +362,21 @@ export function LeadsPanel() {
 
   const statusScreen = renderSheetStatus(sheet);
   if (statusScreen) return statusScreen;
+  const showStage = stage === "all" || stage === "failed" || scheduleOnly;
   const detail = sheetMode && detailId ? (customers.find((c) => c.id === detailId) ?? null) : null;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
-          아직 상담이 시작되지 않은 신규 리드 · 총 {leads.length.toLocaleString("ko-KR")}건
-          {filtered.length !== leads.length && <> · 조건에 맞는 {filtered.length.toLocaleString("ko-KR")}건</>}
+          {scheduleOnly ? "리터치 일정이 있는 고객 · 날짜순" : stage === "lead" ? "아직 상담이 시작되지 않은 신규 리드" : stage === "all" ? "모든 단계의 고객" : `${stage === "failed" ? FAILED_TAG : STAGE_LABEL[stage]} 단계 고객`} · 총 {scoped.length.toLocaleString("ko-KR")}건
+          {filtered.length !== scoped.length && <> · 조건에 맞는 {filtered.length.toLocaleString("ko-KR")}건</>}
         </p>
         {sheetMode ? (
           <div className="flex flex-wrap gap-2">
+            <Button variant={scheduleOnly ? "default" : "outline"} className="h-9 py-2" aria-pressed={scheduleOnly} onClick={toggleSchedule}>
+              <CalendarDaysIcon className="size-3.5" /> 일정관리
+            </Button>
             {sheet.sheetUrl.startsWith("https://docs.google.com/") && (
               <Button asChild variant="outline" className="h-9 py-2">
                 <a href={sheet.sheetUrl} target="_blank" rel="noopener noreferrer">
@@ -298,6 +391,9 @@ export function LeadsPanel() {
           </div>
         ) : (
           <div className="flex flex-wrap gap-2">
+            <Button variant={scheduleOnly ? "default" : "outline"} className="h-9 py-2" aria-pressed={scheduleOnly} onClick={toggleSchedule}>
+              <CalendarDaysIcon className="size-3.5" /> 일정관리
+            </Button>
             <LeadImportDialog />
             <MetaSheetDialog
               currentUrl={sheetConfig?.url ?? null}
@@ -322,6 +418,8 @@ export function LeadsPanel() {
           </div>
         )}
       </div>
+
+      <StatGrid stats={summary} />
 
       {csvMode && sheet.status !== "off" && (
         <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
@@ -384,8 +482,26 @@ export function LeadsPanel() {
         </div>
       )}
 
-      {leads.length > 0 && (
+      {customers.length > 0 && (
         <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="단계 필터">
+            {STAGE_CHIPS.map((s) => (
+              <Chip key={s.id} active={stage === s.id} onClick={() => { setStage(s.id); resetPage(); }}>
+                {s.label}
+                <span className="tabular-nums opacity-70">{(stageCounts.get(s.id) ?? 0).toLocaleString("ko-KR")}</span>
+              </Chip>
+            ))}
+          </div>
+          {scheduleOnly && (
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="일정 필터">
+              {DUE_CHIPS.map((d) => (
+                <Chip key={d.id} active={due === d.id} onClick={() => { setDue(d.id); resetPage(); }}>
+                  {d.label}
+                  <span className="tabular-nums opacity-70">{(dueCounts.get(d.id) ?? 0).toLocaleString("ko-KR")}</span>
+                </Chip>
+              ))}
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
               <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -470,13 +586,13 @@ export function LeadsPanel() {
 
       <Card className="shadow-xs py-0">
         <CardContent className="p-0">
-          {leads.length === 0 ? (
+          {customers.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-12 text-center">
               <p className="text-sm text-muted-foreground">등록된 리드가 없습니다</p>
               {!sheetMode && <p className="text-xs text-muted-foreground">오른쪽 위 &lsquo;CSV 가져오기&rsquo;로 문의 시트를 불러오세요.</p>}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">조건에 맞는 리드가 없습니다</div>
+            <div className="py-12 text-center text-sm text-muted-foreground">{scheduleOnly ? "조건에 맞는 일정이 없습니다" : "조건에 맞는 리드가 없습니다"}</div>
           ) : (
             <Table className="[&_:is(th,td)]:px-3">
               <TableHeader>
@@ -491,6 +607,8 @@ export function LeadsPanel() {
                   <TableHead className="w-20 text-center">채널</TableHead>
                   <TableHead className="w-44">담당 영업</TableHead>
                   <TableHead>다음 액션</TableHead>
+                  {showStage && <TableHead className="w-20 text-center">단계</TableHead>}
+                  {scheduleOnly && <TableHead className="w-28">리터치 일정</TableHead>}
                   <TableHead className="w-24 text-center">계약</TableHead>
                 </TableRow>
               </TableHeader>
@@ -549,8 +667,22 @@ export function LeadsPanel() {
                       <TableCell className="max-w-48 truncate text-xs text-muted-foreground" title={c.nextStep}>
                         {c.nextStep ?? "-"}
                       </TableCell>
+                      {showStage && (
+                        <TableCell className="text-center">
+                          <Badge variant="outline">{isFailed(c) ? FAILED_TAG : STAGE_LABEL[c.stage]}</Badge>
+                        </TableCell>
+                      )}
+                      {scheduleOnly && (
+                        <TableCell className={cn("text-xs tabular-nums whitespace-nowrap", dueDay(c) < today ? "text-destructive" : "text-muted-foreground")}>
+                          {dueDay(c) || "-"}{dueDay(c) && dueDay(c) < today ? " (지남)" : ""}
+                        </TableCell>
+                      )}
                       <TableCell className="text-center">
-                        <ContractDialog company={c.company} askAmount={sheetMode} onConfirm={(amount) => convertToContract(c.id, amount)} />
+                        {c.stage === "won" ? (
+                          <Badge variant="secondary">계약됨</Badge>
+                        ) : (
+                          <ContractDialog company={c.company} askAmount={sheetMode} onConfirm={(amount) => convertToContract(c.id, amount)} />
+                        )}
                       </TableCell>
                     </TableRow>
                   );
