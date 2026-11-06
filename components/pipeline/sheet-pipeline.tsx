@@ -50,11 +50,13 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 
 function DealCard({
   c,
+  saving,
   onOpen,
   onDragStart,
   onDragEnd,
 }: {
   c: Customer;
+  saving: boolean;
   onOpen: (id: string) => void;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
@@ -87,6 +89,11 @@ function DealCard({
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-medium">{c.company}</p>
         <div className="flex shrink-0 items-center gap-1">
+          {saving && (
+            <span role="status" className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <RefreshCw className="size-3 animate-spin" /> 저장 중
+            </span>
+          )}
           <Badge variant="outline" className="text-[10px]">
             {c.category.split("·")[0].trim()}
           </Badge>
@@ -125,6 +132,7 @@ function Column({
   items,
   limit,
   onMore,
+  savingIds,
   draggingId,
   onOpen,
   onDragStart,
@@ -135,6 +143,7 @@ function Column({
   items: Customer[];
   limit: number;
   onMore: () => void;
+  savingIds: ReadonlySet<string>;
   draggingId: string | null;
   onOpen: (id: string) => void;
   onDragStart: (id: string) => void;
@@ -183,7 +192,7 @@ function Column({
           {items.length === 0 ? (
             <p className="py-4 text-center text-xs text-muted-foreground">{isOver && draggingIntoOtherStage ? "여기로 이동" : "없음"}</p>
           ) : (
-            shown.map((c) => <DealCard key={c.id} c={c} onOpen={onOpen} onDragStart={onDragStart} onDragEnd={onDragEnd} />)
+            shown.map((c) => <DealCard key={c.id} c={c} saving={savingIds.has(c.id)} onOpen={onOpen} onDragStart={onDragStart} onDragEnd={onDragEnd} />)
           )}
           {items.length > limit && (
             <Button variant="ghost" size="sm" className="w-full text-xs" onClick={onMore}>
@@ -263,6 +272,11 @@ export function SheetPipeline({ sheet }: { sheet: SheetLeads }) {
         {sheet.fetchedAt && <span>· 마지막 확인 {formatDateTime(sheet.fetchedAt)}</span>}
         <span>· 30초마다 새로 확인</span>
         {sheet.user && <span>· {sheet.user}</span>}
+        {sheet.savingIds.size > 0 ? (
+          <span role="status" className="font-medium text-foreground">· 시트에 저장하는 중…</span>
+        ) : sheet.savedAt ? (
+          <span role="status" className="font-medium text-emerald-700">· ✓ 시트에 저장했습니다 ({formatKst(sheet.savedAt)})</span>
+        ) : null}
         {failedCount > 0 && <span>· 실패/종료 {failedCount}건은 숨김(리드 인박스에서 태그로 확인)</span>}
       </div>
 
@@ -312,6 +326,7 @@ export function SheetPipeline({ sheet }: { sheet: SheetLeads }) {
             items={items}
             limit={limits[stage]}
             onMore={() => setLimits((l) => ({ ...l, [stage]: l[stage] + PAGE }))}
+            savingIds={sheet.savingIds}
             draggingId={draggingId}
             onOpen={setDetailId}
             onDragStart={setDraggingId}

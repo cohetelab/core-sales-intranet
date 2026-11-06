@@ -85,6 +85,9 @@ export function useSheetLeadsState(active: boolean) {
   const [fetchedAt, setFetchedAt] = React.useState<string | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
   const [notice, setNotice] = React.useState<Notice | null>(null);
+  // 시트에 쓰는 중인 고객과, 마지막으로 시트에 저장된 시각(화면에 "저장 중/저장됨"을 보여 주는 용도)
+  const [savingIds, setSavingIds] = React.useState<ReadonlySet<string>>(new Set());
+  const [savedAt, setSavedAt] = React.useState<string | null>(null);
 
   const etag = React.useRef<string | null>(null);
   const pending = React.useRef(0); // 쓰기가 진행 중이면 갱신 결과를 화면에 적용하지 않는다
@@ -207,6 +210,7 @@ export function useSheetLeadsState(active: boolean) {
       const before = new Map(customers.filter((c) => target.has(c.id)).map((c) => [c.id, c]));
       pending.current++;
       setNotice(null);
+      setSavingIds((prev) => new Set([...prev, ...target]));
       setCustomers((prev) => prev.map((c) => (target.has(c.id) ? apply(c) : c)));
       try {
         const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -222,6 +226,8 @@ export function useSheetLeadsState(active: boolean) {
           setCustomers((prev) => prev.map((c) => (failedIds.has(c.id) ? (before.get(c.id) ?? c) : c)));
           const reasons = Array.from(new Set(failed.map(([, r]) => REASON_TEXT[r.reason ?? ""] ?? "시트에 반영하지 못했습니다")));
           setNotice({ kind: "error", source: "write", text: `${failed.length}건을 시트에 쓰지 못했습니다 — ${reasons.join(" · ")}` });
+        } else {
+          setSavedAt(new Date().toISOString());
         }
         return data as Record<string, unknown>;
       } catch (e) {
@@ -232,6 +238,11 @@ export function useSheetLeadsState(active: boolean) {
       } finally {
         pending.current--;
         await load("now");
+        setSavingIds((prev) => {
+          const next = new Set(prev);
+          target.forEach((id) => next.delete(id));
+          return next;
+        });
       }
     },
     [customers, load]
@@ -308,7 +319,7 @@ export function useSheetLeadsState(active: boolean) {
   );
 
   return {
-    status, user, customers, meta, sheetUrl, gid, fetchedAt, refreshing, notice, csvMode, setCsvMode,
+    status, user, customers, meta, sheetUrl, gid, fetchedAt, refreshing, notice, csvMode, setCsvMode, savingIds, savedAt,
     dismissNotice: () => setNotice(null),
     refresh, login, logout, assign, convert, moveStage, record,
   };
