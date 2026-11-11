@@ -1,0 +1,58 @@
+name: core-baalda
+
+x-image: &image
+  image: core-baalda-server:0.1.112
+  build:
+    context: ./upstream
+    dockerfile: app/apps/server/Dockerfile
+
+x-env: &env
+  NODE_ENV: production
+  BAALDA_DEPLOYMENT: self-hosted
+  DATABASE_URL: postgres://baalda:${POSTGRES_PASSWORD:?Run install.ps1 first}@postgres:5432/baalda
+  JWT_SECRET: ${JWT_SECRET:?Run install.ps1 first}
+  BETTER_AUTH_URL: http://localhost:4310
+  PORT: "3010"
+  BLOB_STORAGE: postgres
+  BAALDA_VAULT_KEYS: "off"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: baalda
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run install.ps1 first}
+      POSTGRES_DB: baalda
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U baalda -d baalda"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  migrate:
+    <<: *image
+    command: [node, dist/db/migrate.js]
+    environment: *env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+  server:
+    <<: *image
+    environment: *env
+    ports:
+      - "127.0.0.1:4310:3010"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3010/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+volumes:
+  pgdata:

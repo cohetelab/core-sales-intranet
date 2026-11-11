@@ -33,6 +33,11 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Local Baalda checkout, installers, credentials and verification artifacts
+/services/baalda/upstream/
+/services/baalda/local/
+/services/baalda/backups/
+
 # vercel
 .vercel
 

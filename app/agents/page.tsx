@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { MatcherWorkflow } from "@/components/agents/matcher-workflow";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,11 +31,8 @@ import {
   buildCreativeInsight,
   buildOutreach,
   buildWeeklyDraft,
-  matchCreators,
-  type CreatorMatch,
   type WeeklyDraft,
 } from "@/lib/agents";
-import { IRM_LIMIT, useCreatorIrm } from "@/lib/creator-irm-store";
 import { useCustomerStore } from "@/lib/customer-store";
 import { DEMO_TODAY } from "@/lib/format";
 import { useInfluencerStore } from "@/lib/influencer-store";
@@ -169,86 +167,12 @@ export default function AgentsPage() {
           <h2 className="flex items-center gap-2 text-sm font-medium">
             <BotIcon className="size-4 text-muted-foreground" /> {agent.name} · {agent.role}
           </h2>
-          {active === "matcher" && <MatcherPanel />}
+          {active === "matcher" && <MatcherWorkflow />}
           {active === "outreach" && <OutreachPanel />}
           {active === "weekly" && <WeeklyPanel />}
           {active === "creative" && <CreativePanel />}
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function MatcherPanel() {
-  const { influencers } = useInfluencerStore();
-  const irm = useCreatorIrm();
-  const [brief, setBrief] = React.useState("");
-  const [results, setResults] = React.useState<CreatorMatch[] | null>(null);
-
-  const run = () => setResults(matchCreators(brief, influencers));
-  const full = Object.keys(irm.entries).length >= IRM_LIMIT;
-
-  return (
-    <div className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="brief">브리프</Label>
-        <Textarea
-          id="brief"
-          rows={3}
-          value={brief}
-          onChange={(e) => setBrief(e.target.value)}
-          placeholder="예: 20~30대 여성 타깃 클린뷰티 스킨케어 신제품, 솔직한 리뷰 콘텐츠"
-        />
-      </div>
-      <Button onClick={run} disabled={!brief.trim()}>
-        <PlayIcon className="size-3.5" /> 실행
-      </Button>
-
-      {results && (
-        <div className="space-y-2">
-          <Label>추천 결과 {results.length}명</Label>
-          {results.length === 0 ? (
-            <p className="rounded-2xl bg-muted/50 p-4 text-sm text-muted-foreground">
-              브리프와 일치하는 크리에이터가 없습니다. 카테고리 단어(뷰티, 리뷰 등)를 넣어 보세요.
-            </p>
-          ) : (
-            <ul className="divide-y rounded-2xl ring-1 ring-foreground/5">
-              {results.map(({ creator, reasons }) => {
-                const added = Boolean(irm.entries[creator.id]);
-                return (
-                  <li key={creator.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">@{creator.handle}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {creator.platform === "instagram" ? "Instagram" : "TikTok"} ·{" "}
-                        {creator.followers.toLocaleString()}명 · 참여율 {creator.engagementRate}%
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        근거: {reasons.length ? reasons.join(", ") : "참여율 기준"}
-                      </p>
-                    </div>
-                    {added ? (
-                      <Button asChild variant="outline" size="sm">
-                        <Link href="/creator-irm">
-                          <CheckIcon className="size-3.5" /> 커뮤니티에 있음
-                        </Link>
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        disabled={full}
-                        onClick={() => irm.add(creator.id)}
-                      >
-                        커뮤니티에 추가
-                      </Button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      )}
     </div>
   );
 }

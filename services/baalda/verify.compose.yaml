@@ -1,0 +1,38 @@
+services:
+  test-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: verify
+      POSTGRES_PASSWORD: isolated-test-only
+      POSTGRES_DB: baalda_verify
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U verify -d baalda_verify"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  tests:
+    image: core-baalda-checks:0.1.112
+    build:
+      context: ./upstream
+      dockerfile: app/apps/server/Dockerfile
+      target: build
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgres://verify:isolated-test-only@test-postgres:5432/baalda_verify
+      JWT_SECRET: isolated-test-only-not-used-by-the-local-server-32bytes
+      BETTER_AUTH_URL: http://localhost:3010
+    depends_on:
+      test-postgres:
+        condition: service_healthy
+    working_dir: /repo/app
+    volumes:
+      - ./upstream/app/apps/desktop:/repo/app/apps/desktop
+    command:
+      - sh
+      - -c
+      - >-
+        pnpm install --offline --frozen-lockfile &&
+        pnpm --filter server exec vitest run tests/sync-e2e.test.ts tests/mcp-edits.test.ts tests/mcp.test.ts tests/permissions.test.ts tests/rename-guard.test.ts tests/vault-channel-revoked.test.ts tests/blobs.test.ts &&
+        pnpm --filter desktop exec vitest run src/lib/bridge/__tests__/concurrent.test.ts src/lib/bridge/__tests__/clobber.test.ts src/lib/bridge/__tests__/echo.test.ts src/lib/bridge/__tests__/roundtrip.test.ts src/lib/sync/__tests__/closedAppEdits.test.ts src/lib/sync/__tests__/offlineBinaryRename.test.ts src/lib/sync/__tests__/readOnlyReconnect.test.ts

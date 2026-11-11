@@ -102,6 +102,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
     items: [
       { title: "크리에이터 정산", url: "/creator-settlements", icon: <WalletIcon /> },
       { title: "정산 건 등록", url: "/creator-settlements/new", icon: <PlusCircleIcon /> },
+      { title: "매출 세금계산서", url: "/sales-invoices", icon: <ReceiptTextIcon /> },
     ],
   },
   {
@@ -137,6 +138,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
     label: "실무",
     icon: <SproutIcon />,
     items: [
+      { title: "팀 지식창고", url: "/knowledge", icon: <FolderIcon /> },
       {
         title: "Core Insta Hub",
         url: "/insta-hub",

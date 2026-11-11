@@ -1,4 +1,5 @@
 export const PAGE_META: Record<string, string> = {
+  "/knowledge": "팀 지식창고",
   "/": "대시보드",
   "/pipeline": "딜 파이프라인",
   "/leads": "리드 인박스",
@@ -18,8 +19,8 @@ export const PAGE_META: Record<string, string> = {
   "/references": "레퍼런스",
   "/video-references": "영상 레퍼런스",
   "/agents": "에이전트 허브",
-  "/agents/room": "에이전트 회의실",
   "/agents/pepper": "페퍼 1:1 대화",
+  "/agents/room": "에이전트 회의실",
   "/agents/roster": "에이전트 관리",
   "/campaigns": "캠페인 운영",
   "/campaigns/tasks": "업무 보드",
