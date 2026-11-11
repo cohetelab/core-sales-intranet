@@ -14,6 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { renderSheetStatus } from "@/components/leads/sheet-status-screen";
+import { SheetReports } from "@/components/reports/sheet-reports";
+import { useSheetLeads } from "@/components/sheet-leads-provider";
 import { StatGrid, type Stat } from "@/components/stat-card";
 import {
   monthlyRevenue,
@@ -28,6 +31,11 @@ import { RepPerformanceChart } from "@/components/charts/rep-performance-chart";
 
 export default function ReportsPage() {
   const { customers } = useCustomerStore();
+  // 구글 시트 연동이 설정돼 있고 CSV 방식을 고르지 않았으면 시트가 원본인 리포트를 보여 준다(아래는 샘플 데이터 화면).
+  const sheet = useSheetLeads();
+  const statusScreen = renderSheetStatus(sheet);
+  if (statusScreen) return statusScreen;
+  if (!sheet.csvMode && sheet.status === "ready") return <SheetReports sheet={sheet} />;
   const wonCount = customers.filter((c) => c.stage === "won").length;
   const totalQuota = repPerformance.reduce((s, r) => s + r.quota, 0);
   const totalMrr = repPerformance.reduce((s, r) => s + r.mrr, 0);
