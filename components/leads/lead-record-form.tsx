@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { hasStampedNote } from "@/lib/lead-response";
 import { FIELD_KEYS, cleanCell, formatContract, fromSheetDate, noteLine, sameCell, toSheetDate, todayKst, type FieldKey } from "@/lib/lead-fields";
 
 type Raw = Partial<Record<FieldKey, string>>;
@@ -72,10 +73,21 @@ export function LeadRecordForm({
   const hasChanges = Object.keys(changes).length > 0;
 
   async function save() {
-    if (!hasChanges || saving || probabilityBad || contractBad) return;
+    if (!hasChanges || probabilityBad || contractBad) return;
+    await submit(changes);
+  }
+
+  // 시각이 남은 기록이 아직 없는 고객에게 한 번 눌러 "첫 컨택 완료"를 남긴다(응답 속도 측정의 기준이 된다).
+  async function markFirstContact() {
+    const existing = cleanCell(base.consult);
+    await submit({ consult: `${existing ? `${existing}\n` : ""}${noteLine(user, "첫 컨택 완료")}`, lastContact: toSheetDate(todayKst()) });
+  }
+
+  async function submit(toSave: Raw) {
+    if (saving) return;
     setSaving(true);
     setMessage(null);
-    const res = await onSave(changes, base);
+    const res = await onSave(toSave, base);
     setSaving(false);
     if (res.ok) {
       const next = res.raw ?? {};
@@ -90,6 +102,7 @@ export function LeadRecordForm({
   }
 
   const existingNote = cleanCell(base.consult);
+  const needsFirstContact = !hasStampedNote(base.consult);
 
   return (
     <section className="space-y-3 rounded-2xl border p-3" aria-label="상담 기록">
@@ -100,6 +113,17 @@ export function LeadRecordForm({
           <span>시트에서 이 고객의 내용이 바뀌었습니다. 저장하면 충돌할 수 있어요.</span>
           <button type="button" onClick={reload} className="shrink-0 underline">최신으로 불러오기</button>
         </p>
+      )}
+
+      {needsFirstContact && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/50 px-2.5 py-2">
+          <Button size="sm" variant="outline" className="h-8" disabled={saving || hasChanges} onClick={() => void markFirstContact()}>
+            첫 컨택 완료
+          </Button>
+          <span className="text-[11px] text-muted-foreground">
+            {hasChanges ? "저장하지 않은 내용이 있어요. 먼저 저장해 주세요." : "아직 시각이 남은 상담 기록이 없습니다. 연락했다면 눌러서 기록하세요."}
+          </span>
+        </div>
       )}
 
       {existingNote && (

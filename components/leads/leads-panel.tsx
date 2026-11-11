@@ -51,6 +51,7 @@ import { useCustomerStore } from "@/lib/customer-store";
 import { formatDateTime, formatKst } from "@/lib/format";
 import { CHECKS, loadByOwner, matchesCheck, runChecks, type CheckId } from "@/lib/lead-checks";
 import { todayKst } from "@/lib/lead-fields";
+import { WINDOW_DAYS, formatDuration, responseStats } from "@/lib/lead-response";
 import { CHANNELS, SERVICE_LABELS, planBalancedAssignment } from "@/lib/lead-sheet";
 import {
   clearMetaSheetConfig,
@@ -253,6 +254,7 @@ export function LeadsPanel() {
   }
   const checkCounts = React.useMemo(() => runChecks(customers, nowMs, today), [customers, nowMs, today]);
   const ownerLoad = React.useMemo(() => loadByOwner(customers), [customers]);
+  const response = React.useMemo(() => responseStats(customers, nowMs), [customers, nowMs]);
   function toggleCheck(id: CheckId) {
     // 점검 항목을 누르면 그 조건에 해당하는 고객만 표에 모아 보여 준다. 같은 항목을 다시 누르면 해제.
     const next = check === id ? null : id;
@@ -483,6 +485,50 @@ export function LeadsPanel() {
                     .map(([o, n]) => `${o} ${n.toLocaleString("ko-KR")}건`)
                     .join(" · ")}
             </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {sheetMode && (
+        <Card className="shadow-xs py-0">
+          <CardContent className="space-y-2 py-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <h2 className="text-sm font-medium">응답 속도 <span className="font-normal text-muted-foreground">· 최근 {WINDOW_DAYS}일 문의 기준</span></h2>
+              <span className="text-xs text-muted-foreground">문의 시각부터 첫 상담 기록까지 · 인트라넷에서 남긴 기록만 집계됩니다</span>
+            </div>
+            {response.measured === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                아직 측정된 건이 없습니다. 상담 내용을 저장하거나 고객 상세에서 &lsquo;첫 컨택 완료&rsquo;를 누르면 여기에 쌓입니다.
+                {response.total > 0 && <> 최근 {WINDOW_DAYS}일 문의 {response.total.toLocaleString("ko-KR")}건 중 {response.waiting24h.toLocaleString("ko-KR")}건은 24시간이 지났는데 첫 기록이 없습니다.</>}
+              </p>
+            ) : (
+              <>
+                <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="응답 속도 요약">
+                  <div>
+                    <dt className="text-xs text-muted-foreground">중앙값</dt>
+                    <dd className="text-lg font-semibold tabular-nums">{formatDuration(response.medianMs)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">1시간 이내</dt>
+                    <dd className="text-lg font-semibold tabular-nums">{Math.round((response.within1h / response.measured) * 100)}%</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">24시간 이내</dt>
+                    <dd className="text-lg font-semibold tabular-nums">{Math.round((response.within24h / response.measured) * 100)}%</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">측정된 문의</dt>
+                    <dd className="text-lg font-semibold tabular-nums">
+                      {response.measured.toLocaleString("ko-KR")} / {response.total.toLocaleString("ko-KR")}건
+                    </dd>
+                  </div>
+                </dl>
+                <p className="text-xs text-muted-foreground">
+                  {response.byOwner.map((o) => `${o.owner} ${formatDuration(o.medianMs)}(${o.measured.toLocaleString("ko-KR")}건)`).join(" · ")}
+                  {response.waiting24h > 0 && <> · 24시간 넘게 첫 기록 없음 {response.waiting24h.toLocaleString("ko-KR")}건</>}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       )}
