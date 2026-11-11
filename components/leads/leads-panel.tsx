@@ -49,6 +49,7 @@ import { StatGrid, type Stat } from "@/components/stat-card";
 import { SOURCE_LABEL, STAGE_LABEL } from "@/lib/mock-data";
 import { useCustomerStore } from "@/lib/customer-store";
 import { formatDateTime, formatKst } from "@/lib/format";
+import { CHECKS, loadByOwner, matchesCheck, runChecks, type CheckId } from "@/lib/lead-checks";
 import { todayKst } from "@/lib/lead-fields";
 import { CHANNELS, SERVICE_LABELS, planBalancedAssignment } from "@/lib/lead-sheet";
 import {
@@ -133,6 +134,8 @@ export function LeadsPanel() {
   const [stage, setStage] = React.useState<StageFilter>("lead");
   const [scheduleOnly, setScheduleOnly] = React.useState(false);
   const [due, setDue] = React.useState<DueFilter>("all");
+  const [check, setCheck] = React.useState<CheckId | null>(null);
+  const [nowMs] = React.useState(() => Date.now());
   const [page, setPage] = React.useState(0);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [bulkOwner, setBulkOwner] = React.useState<string>(SALES_REPS[0]);
@@ -161,10 +164,10 @@ export function LeadsPanel() {
   const scoped = React.useMemo(
     () =>
       customers
-        .filter((c) => matchesStage(c, stage) && matchesDue(c, due))
+        .filter((c) => matchesStage(c, stage) && matchesDue(c, due) && (!check || matchesCheck(check, c, nowMs, today)))
         .sort((a, b) => (scheduleOnly ? dueDay(a).localeCompare(dueDay(b)) : a.createdAt < b.createdAt ? 1 : -1)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [customers, stage, scheduleOnly, due, today]
+    [customers, stage, scheduleOnly, due, today, check, nowMs]
   );
 
   const matchesQuery = React.useCallback(
@@ -204,10 +207,10 @@ export function LeadsPanel() {
     return map;
   }, [scoped, matchesQuery, service]);
   const stageCounts = React.useMemo(() => {
-    const base = customers.filter((c) => matchesQuery(c) && matchesService(c, service) && matchesOwner(c, owner) && matchesDue(c, due));
+    const base = customers.filter((c) => matchesQuery(c) && matchesService(c, service) && matchesOwner(c, owner) && matchesDue(c, due) && (!check || matchesCheck(check, c, nowMs, today)));
     return new Map<StageFilter, number>(STAGE_CHIPS.map((s) => [s.id, base.filter((c) => matchesStage(c, s.id)).length]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customers, matchesQuery, service, owner, scheduleOnly, due, today]);
+  }, [customers, matchesQuery, service, owner, scheduleOnly, due, today, check, nowMs]);
   const dueCounts = React.useMemo(() => {
     const base = customers.filter((c) => matchesStage(c, stage) && matchesQuery(c) && matchesService(c, service) && matchesOwner(c, owner));
     const days = base.filter((c) => dueDay(c) && !isFailed(c)).map(dueDay);
@@ -220,7 +223,6 @@ export function LeadsPanel() {
   }, [customers, stage, matchesQuery, service, owner, today]);
 
   // 맨 위 요약 카드(실패/종료는 제외하고 센다)
-  const [nowMs] = React.useState(() => Date.now());
   const summary = React.useMemo<Stat[]>(() => {
     const active = customers.filter((c) => !isFailed(c));
     const openLeads = leads.filter((c) => !isFailed(c));
@@ -249,9 +251,26 @@ export function LeadsPanel() {
   function resetPage() {
     setPage(0);
   }
+  const checkCounts = React.useMemo(() => runChecks(customers, nowMs, today), [customers, nowMs, today]);
+  const ownerLoad = React.useMemo(() => loadByOwner(customers), [customers]);
+  function toggleCheck(id: CheckId) {
+    // 점검 항목을 누르면 그 조건에 해당하는 고객만 표에 모아 보여 준다. 같은 항목을 다시 누르면 해제.
+    const next = check === id ? null : id;
+    setCheck(next);
+    if (next) {
+      setScheduleOnly(false);
+      setDue("all");
+      setStage("all");
+    } else {
+      setStage("lead");
+    }
+    setSelected(new Set());
+    resetPage();
+  }
   function toggleSchedule() {
     // 일정관리를 켜면 모든 단계에서 리터치 일정이 있는 고객을 날짜순으로 보여 주고, 끄면 신규 리드로 돌아간다.
     const next = !scheduleOnly;
+    setCheck(null);
     setScheduleOnly(next);
     setDue("all");
     setStage(next ? "all" : "lead");
@@ -420,6 +439,53 @@ export function LeadsPanel() {
       </div>
 
       <StatGrid stats={summary} />
+
+      {customers.length > 0 && (
+        <Card className="shadow-xs py-0">
+          <CardContent className="space-y-2 py-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <h2 className="text-sm font-medium">오늘의 점검</h2>
+              <span className="text-xs text-muted-foreground">시트 데이터로 자동 계산합니다 · 읽기만 하고 아무것도 바꾸지 않습니다</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="오늘의 점검">
+              {CHECKS.map((ch) => {
+                const n = checkCounts[ch.id];
+                return (
+                  <button
+                    key={ch.id}
+                    type="button"
+                    title={ch.hint}
+                    aria-pressed={check === ch.id}
+                    onClick={() => toggleCheck(ch.id)}
+                    className={cn(
+                      "inline-flex h-8 items-center gap-1.5 rounded-2xl px-3 text-xs ring-1 transition-colors",
+                      check === ch.id
+                        ? "bg-primary text-primary-foreground ring-primary"
+                        : n > 0 && ch.tone === "danger"
+                          ? "bg-red-500/10 text-red-700 ring-red-500/30 hover:bg-red-500/15"
+                          : n > 0 && ch.tone === "warning"
+                            ? "bg-amber-500/10 text-amber-800 ring-amber-500/30 hover:bg-amber-500/15"
+                            : "text-muted-foreground ring-foreground/10 hover:bg-muted"
+                    )}
+                  >
+                    {ch.label}
+                    <span className="font-semibold tabular-nums">{n.toLocaleString("ko-KR")}건</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {Object.values(checkCounts).every((n) => n === 0) ? "지금 확인할 항목이 없습니다. " : "항목을 누르면 해당 고객만 표에 모아 봅니다. "}
+              담당별 진행 중(계약 전):{" "}
+              {Object.keys(ownerLoad).length === 0
+                ? "없음"
+                : Object.entries(ownerLoad)
+                    .map(([o, n]) => `${o} ${n.toLocaleString("ko-KR")}건`)
+                    .join(" · ")}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {csvMode && sheet.status !== "off" && (
         <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
