@@ -16,11 +16,13 @@ import { cn } from "@/lib/utils";
 // 구글 시트가 원본인 리포트: 채널·서비스·월별로 문의 → 상담 → 계약이 어떻게 이어지는지 본다.
 // 시트에 캠페인·소재 칸이 없어서 지금은 채널(홈페이지/META/유선)까지만 구분한다.
 
-type Period = "all" | "90" | "30";
+type Period = "all" | "90" | "30" | "7" | "1";
 const PERIODS: { id: Period; label: string; days: number | null }[] = [
   { id: "all", label: "전체 기간", days: null },
   { id: "90", label: "최근 90일", days: 90 },
   { id: "30", label: "최근 30일", days: 30 },
+  { id: "7", label: "최근 7일", days: 7 },
+  { id: "1", label: "최근 1일", days: 1 },
 ];
 
 const n = (v: number) => v.toLocaleString("ko-KR");
