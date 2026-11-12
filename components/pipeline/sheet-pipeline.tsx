@@ -157,7 +157,7 @@ function Column({
 
   return (
     <Card
-      className={cn("shadow-xs transition-colors", isOver && draggingIntoOtherStage && "ring-2 ring-primary/50")}
+      className={cn("min-w-[18rem] flex-1 snap-start shadow-xs transition-colors", isOver && draggingIntoOtherStage && "ring-2 ring-primary/50")}
       data-stage={stage}
       onDragOver={(e) => {
         if (!draggingId) return;
@@ -318,7 +318,7 @@ export function SheetPipeline({ sheet }: { sheet: SheetLeads }) {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="-mx-4 flex snap-x snap-proximity gap-3 overflow-x-auto px-4 pb-3 lg:-mx-6 lg:px-6" role="region" aria-label="파이프라인 칸반" tabIndex={0}>
         {byStage.map(({ stage, items }) => (
           <Column
             key={stage}
