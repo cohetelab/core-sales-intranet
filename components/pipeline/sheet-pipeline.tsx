@@ -210,6 +210,7 @@ export function SheetPipeline({ sheet }: { sheet: SheetLeads }) {
   const [owner, setOwner] = React.useState("all");
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [draggingId, setDraggingId] = React.useState<string | null>(null);
+  const [blockNote, setBlockNote] = React.useState<string | null>(null);
   const [limits, setLimits] = React.useState<Record<DealStage, number>>({ lead: PAGE, discovery: PAGE, proposal: PAGE, won: PAGE });
 
   // 실패/종료 고객은 파이프라인에서 숨긴다(리드 인박스에서 태그로 볼 수 있다).
@@ -295,6 +296,15 @@ export function SheetPipeline({ sheet }: { sheet: SheetLeads }) {
         </div>
       )}
 
+      {blockNote && (
+        <div role="alert" className="flex items-start justify-between gap-3 rounded-2xl bg-muted px-3 py-2 text-xs text-foreground">
+          <span>{blockNote}</span>
+          <button type="button" onClick={() => setBlockNote(null)} className="shrink-0 underline">
+            닫기
+          </button>
+        </div>
+      )}
+
       <StatGrid stats={stats} className="grid-cols-1 @xl/main:grid-cols-3" />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -334,7 +344,14 @@ export function SheetPipeline({ sheet }: { sheet: SheetLeads }) {
             onDropCustomer={(id, target) => {
               setDraggingId(null);
               const card = sheet.customers.find((c) => c.id === id);
-              if (card && card.stage !== target) void sheet.moveStage(id, target);
+              if (!card || card.stage === target) return;
+              // 계약 금액이 적혀 있으면 단계 칸을 비워도(리드로 되돌려도) 계속 계약으로 읽힌다. 시트의 금액을 지우는 건 여기서 하지 않는다.
+              if (target === "lead" && contractAmountOf(card.tags) > 0) {
+                setBlockNote(`${card.company}은(는) 시트에 계약 금액이 적혀 있어 리드로 되돌릴 수 없습니다. 되돌리려면 시트의 '계약 금액'을 먼저 비워 주세요.`);
+                return;
+              }
+              setBlockNote(null);
+              void sheet.moveStage(id, target);
             }}
           />
         ))}

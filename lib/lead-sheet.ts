@@ -346,7 +346,8 @@ export function recordToCustomer(r: LeadRecord, nowIso = new Date().toISOString(
     company: r.company || "상호 미기재",
     category: r.services.length ? r.services.join(" · ") : "미분류",
     website: "-",
-    stage: r.stage ?? "lead",
+    // 단계 칸을 안 쓰는 시트가 많아서, 단계가 비어 있어도 계약 금액이 적혀 있으면 계약으로 본다(실패/종료는 제외).
+    stage: r.stage ?? (!r.failed && /[1-9]/.test((r.contractAmount ?? "").replace(/\D/g, "")) ? "won" : "lead"),
     dealValueMonthly: 0,
     source: "inbound",
     owner,

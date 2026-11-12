@@ -3,15 +3,15 @@ import { CHANNELS, SERVICE_LABELS } from "./lead-sheet";
 import type { Customer } from "./types";
 
 // 채널·서비스·월별 문의 → 상담 → 계약 퍼널. 시트 데이터만으로 계산하고 아무것도 쓰지 않는다.
-// 시트의 '단계' 칸이 거의 비어 있어도 쓸 수 있게, 계약은 "단계가 계약이거나 계약 금액이 적힌 고객"으로,
-// 상담은 "단계가 리드가 아니거나 계약이거나 상담 내용이 있는 고객"으로 본다.
+// 계약은 고객의 단계가 계약인 경우다. 시트의 '단계' 칸이 비어 있어도 계약 금액이 적혀 있으면 시트를 읽을 때
+// 이미 계약 단계로 처리되므로, 모든 화면이 같은 기준을 쓴다. 상담은 "단계가 리드가 아니거나 상담 내용이 있는 고객"이다.
 
 export const DAY_MS = 86_400_000;
 const FAILED_TAG = "실패/종료";
 const KST_MS = 9 * 3_600_000;
 
 export const isFailed = (c: Customer) => c.tags.includes(FAILED_TAG);
-export const isContracted = (c: Customer) => !isFailed(c) && (c.stage === "won" || contractAmountOf(c.tags) > 0);
+export const isContracted = (c: Customer) => !isFailed(c) && c.stage === "won";
 export const isEngaged = (c: Customer) =>
   !isFailed(c) && (c.stage !== "lead" || isContracted(c) || c.activities.some((a) => a.type === "note" && a.summary === "1차 상담 내용"));
 
@@ -71,7 +71,5 @@ export function totals(customers: Customer[]) {
     contracted: contracted.length,
     amount: contracted.reduce((s, c) => s + contractAmountOf(c.tags), 0),
     withAmount: contracted.filter((c) => contractAmountOf(c.tags) > 0).length,
-    // 단계 칸은 비어 있고 계약 금액으로만 계약으로 본 고객 수(시트 입력 습관을 알려 주는 값)
-    viaAmountOnly: contracted.filter((c) => c.stage !== "won").length,
   };
 }

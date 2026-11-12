@@ -199,10 +199,7 @@ export function SheetReports({ sheet }: { sheet: SheetLeads }) {
         <CardContent className="space-y-1 py-4 text-xs text-muted-foreground">
           <h2 className="text-sm font-medium text-foreground">숫자를 볼 때 알아 둘 점</h2>
           <ul className="list-disc space-y-1 pl-4">
-            <li>
-              계약은 시트의 &lsquo;단계&rsquo;가 계약이거나 &lsquo;계약 금액&rsquo;이 적힌 고객입니다.
-              {t.viaAmountOnly > 0 && <> 그중 {n(t.viaAmountOnly)}명은 단계 칸이 비어 있고 계약 금액으로만 계약으로 셌습니다.</>}
-            </li>
+            <li>계약은 시트의 &lsquo;단계&rsquo;가 계약이거나, 단계 칸이 비어 있고 &lsquo;계약 금액&rsquo;이 적힌 고객입니다. 다른 화면(파이프라인·고객사)도 같은 기준입니다.</li>
             <li>상담 기록 이상은 단계가 리드가 아니거나, 상담 내용이 적혀 있거나, 계약인 고객입니다. 전화만 하고 시트에 적지 않은 건 빠집니다.</li>
             <li>시트에 캠페인·소재 칸이 없어서 지금은 채널까지만 나눌 수 있습니다. 광고·소재별로 보려면 시트에 그 칸이 필요합니다.</li>
             <li>최근에 들어온 문의는 아직 계약까지 가는 중이라 전환율이 낮게 보일 수 있습니다.</li>
