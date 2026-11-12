@@ -7,6 +7,9 @@ import { ArrowRightIcon, ChevronRightIcon, CircleIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { SheetHome } from "@/components/home/sheet-home";
+import { renderSheetStatus } from "@/components/leads/sheet-status-screen";
+import { useSheetLeads } from "@/components/sheet-leads-provider";
 import { RevenueTrendChart } from "@/components/charts/revenue-trend-chart";
 import { calendarEvents, monthlyRevenue, STAGE_LABEL, STAGE_ORDER } from "@/lib/mock-data";
 import { IRM_LIMIT, useCreatorIrm } from "@/lib/creator-irm-store";
@@ -41,6 +44,11 @@ function SeeAll({ href, label = "전체 보기" }: { href: string; label?: strin
 export default function Dashboard() {
   const { customers } = useCustomerStore();
   const irm = useCreatorIrm();
+  // 구글 시트 연동이 설정돼 있고 CSV 방식을 고르지 않았으면 시트가 원본인 홈을 보여 준다(아래는 샘플 데이터 화면).
+  const sheet = useSheetLeads();
+  const statusScreen = renderSheetStatus(sheet);
+  if (statusScreen) return statusScreen;
+  if (!sheet.csvMode && sheet.status === "ready") return <SheetHome sheet={sheet} />;
 
   const today = DEMO_TODAY;
   const todayStr = today.format("YYYY-MM-DD");

@@ -8,6 +8,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { AgentDockPanel, AgentDockProvider } from "@/components/agent-dock";
+import { SampleDataNotice } from "@/components/sample-data-notice";
 import { SheetLeadsProvider } from "@/components/sheet-leads-provider";
 import { ViewModeGate, ViewModeProvider } from "@/components/view-mode";
 import { CustomerStoreProvider } from "@/lib/customer-store";
@@ -44,6 +45,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                       id="page-content"
                       className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:py-6 lg:px-6"
                     >
+                      <SampleDataNotice />
                       {children}
                     </div>
                   </div>
