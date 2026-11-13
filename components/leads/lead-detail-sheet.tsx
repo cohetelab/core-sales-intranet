@@ -82,7 +82,9 @@ export function LeadDetailSheet({
               <div>
                 <h3 className="mb-2 text-xs font-medium text-muted-foreground">문의·활동 이력</h3>
                 <ol className="space-y-2">
-                  {customer.activities.map((a) => (
+                  {customer.activities
+                    .filter((a) => !(raw && user && a.type === "note" && a.summary === "1차 상담 내용"))
+                    .map((a) => (
                     <li key={a.id} className="rounded-2xl bg-muted/50 px-3 py-2">
                       <p className="flex items-center justify-between gap-2 text-xs">
                         <span className="font-medium">{a.summary}</span>

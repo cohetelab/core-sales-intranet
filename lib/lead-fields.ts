@@ -37,7 +37,9 @@ export const FIELD_LABEL: Record<FieldKey, string> = {
   contract: "계약 금액",
 };
 
-const LIMIT: Record<FieldKey, number> = { consult: 4000, nextAction: 200, probability: 5, lastContact: 20, retouch: 20, memo: 1000, contract: 24 };
+// 상담 내용 칸의 한도. 배포된 시트 스크립트(Code.gs의 MAX_VALUE_LENGTH)가 한 칸에 5000자까지만 쓰게 막으므로 같은 값을 쓴다.
+export const CONSULT_LIMIT = 5000;
+const LIMIT: Record<FieldKey, number> = { consult: CONSULT_LIMIT, nextAction: 200, probability: 5, lastContact: 20, retouch: 20, memo: 1000, contract: 24 };
 
 const ERROR_CELL = /^#(N\/A|REF!|VALUE!|NAME\?|DIV\/0!|NUM!|NULL!)/i;
 
@@ -73,6 +75,10 @@ export function noteLine(user: string, text: string, now = Date.now()) {
   const who = user.match(/\(([^)]+)\)/)?.[1] ?? user;
   return `[${k.slice(5, 7)}.${k.slice(8, 10)} ${k.slice(11, 16)} ${who}] ${text.trim()}`;
 }
+
+// 유형(전화·이메일·미팅·메모)이 붙은 기록 줄: [11.06 14:30 Ian] (전화) 내용
+export const typedNoteLine = (user: string, text: string, type: string | null, now = Date.now()) =>
+  noteLine(user, type ? `(${type}) ${text.trim()}` : text, now);
 
 export const formatContract = (amount: number) => `₩${Math.round(amount).toLocaleString("en-US")}`;
 

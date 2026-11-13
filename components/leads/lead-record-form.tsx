@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { HistoryTimeline } from "@/components/leads/history-timeline";
+import { HISTORY_TYPES, type HistoryType } from "@/lib/lead-history";
 import { hasStampedNote } from "@/lib/lead-response";
-import { FIELD_KEYS, cleanCell, formatContract, fromSheetDate, noteLine, sameCell, toSheetDate, todayKst, type FieldKey } from "@/lib/lead-fields";
+import { CONSULT_LIMIT, FIELD_KEYS, cleanCell, formatContract, fromSheetDate, noteLine, sameCell, toSheetDate, todayKst, typedNoteLine, type FieldKey } from "@/lib/lead-fields";
 
 type Raw = Partial<Record<FieldKey, string>>;
 export type RecordResult = { ok: boolean; message?: string; raw?: Raw };
@@ -37,6 +39,7 @@ export function LeadRecordForm({
   const [base, setBase] = React.useState<Raw>(raw);
   const init = React.useMemo(() => initialFrom(base), [base]);
   const [note, setNote] = React.useState("");
+  const [noteType, setNoteType] = React.useState<HistoryType>("전화");
   const [f, setF] = React.useState(init);
   const [contactTouched, setContactTouched] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -62,7 +65,7 @@ export function LeadRecordForm({
   const changes: Raw = {};
   if (noteText) {
     const existing = cleanCell(base.consult);
-    changes.consult = `${existing ? `${existing}\n` : ""}${noteLine(user, noteText)}`;
+    changes.consult = `${existing ? `${existing}\n` : ""}${typedNoteLine(user, noteText, noteType)}`;
   }
   if (contact !== init.lastContact) changes.lastContact = contact ? toSheetDate(contact) : "";
   if (f.retouch !== init.retouch) changes.retouch = f.retouch ? toSheetDate(f.retouch) : "";
@@ -71,16 +74,24 @@ export function LeadRecordForm({
   if (f.memo.trim() !== init.memo) changes.memo = f.memo.trim();
   if (showContract && !contractBad && f.contract !== init.contract) changes.contract = f.contract ? formatContract(Number(f.contract)) : "";
   const hasChanges = Object.keys(changes).length > 0;
+  // 시트의 상담 내용 칸이 가득 차면 더 쓸 수 없다. 저장하기 전에 남은 글자 수를 보여 준다.
+  const consultLen = (changes.consult ?? cleanCell(base.consult)).length;
+  const consultBad = consultLen > CONSULT_LIMIT;
 
   async function save() {
-    if (!hasChanges || probabilityBad || contractBad) return;
+    if (!hasChanges || probabilityBad || contractBad || consultBad) return;
     await submit(changes);
   }
 
   // 시각이 남은 기록이 아직 없는 고객에게 한 번 눌러 "첫 컨택 완료"를 남긴다(응답 속도 측정의 기준이 된다).
   async function markFirstContact() {
     const existing = cleanCell(base.consult);
-    await submit({ consult: `${existing ? `${existing}\n` : ""}${noteLine(user, "첫 컨택 완료")}`, lastContact: toSheetDate(todayKst()) });
+    const consult = `${existing ? `${existing}\n` : ""}${noteLine(user, "첫 컨택 완료")}`;
+    if (consult.length > CONSULT_LIMIT) {
+      setMessage({ ok: false, text: "이 고객의 상담 기록 칸이 가득 찼습니다. 시트에서 오래된 기록을 정리한 뒤 다시 시도해 주세요." });
+      return;
+    }
+    await submit({ consult, lastContact: toSheetDate(todayKst()) });
   }
 
   async function submit(toSave: Raw) {
@@ -126,15 +137,23 @@ export function LeadRecordForm({
         </div>
       )}
 
-      {existingNote && (
-        <div>
-          <p className="mb-1 text-[11px] text-muted-foreground">지금까지의 상담 내용</p>
-          <p className="max-h-32 overflow-y-auto rounded-xl bg-muted/50 px-2.5 py-2 text-xs leading-relaxed whitespace-pre-wrap">{existingNote}</p>
-        </div>
-      )}
+      {existingNote && <HistoryTimeline consult={existingNote} />}
 
       <div className="space-y-1">
         <Label htmlFor="lead-note" className="text-xs">상담 내용 추가</Label>
+        <div className="flex flex-wrap items-center gap-1" role="group" aria-label="기록 유형">
+          {HISTORY_TYPES.map((t) => (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={noteType === t}
+              onClick={() => setNoteType(t)}
+              className={`inline-flex h-6 items-center rounded-full px-2.5 text-[11px] ring-1 transition-colors ${noteType === t ? "bg-primary text-primary-foreground ring-primary" : "ring-foreground/10 hover:bg-muted"}`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
         <Textarea
           id="lead-note"
           rows={3}
@@ -144,6 +163,11 @@ export function LeadRecordForm({
           placeholder="통화·미팅 내용을 적으면 [날짜 시간 이름]과 함께 이어서 기록됩니다"
           className="text-xs"
         />
+        <p className={consultBad ? "text-[11px] text-destructive" : consultLen > CONSULT_LIMIT * 0.85 ? "text-[11px] text-amber-700" : "text-[11px] text-muted-foreground"} role={consultBad ? "alert" : undefined}>
+          {consultBad
+            ? `상담 기록 칸이 가득 찼습니다(${consultLen.toLocaleString("ko-KR")}/${CONSULT_LIMIT.toLocaleString("ko-KR")}자). 시트에서 오래된 기록을 정리해 주세요.`
+            : `상담 기록 칸 ${consultLen.toLocaleString("ko-KR")}/${CONSULT_LIMIT.toLocaleString("ko-KR")}자`}
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -192,7 +216,7 @@ export function LeadRecordForm({
       </div>
 
       <div className="flex items-center gap-2">
-        <Button size="sm" onClick={() => void save()} disabled={!hasChanges || saving || probabilityBad || contractBad}>
+        <Button size="sm" onClick={() => void save()} disabled={!hasChanges || saving || probabilityBad || contractBad || consultBad}>
           {saving ? "시트에 저장하는 중…" : "시트에 저장"}
         </Button>
         {!hasChanges && !message && <span className="text-[11px] text-muted-foreground">바뀐 내용이 없습니다</span>}
