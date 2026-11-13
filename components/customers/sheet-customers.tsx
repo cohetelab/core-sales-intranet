@@ -4,6 +4,7 @@ import * as React from "react";
 import { ExternalLinkIcon, RefreshCw, SearchIcon } from "lucide-react";
 
 import { LeadDetailSheet } from "@/components/leads/lead-detail-sheet";
+import { ColumnWarning } from "@/components/column-warning";
 import type { SheetLeads } from "@/components/sheet-leads-provider";
 import { StatGrid, type Stat } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
@@ -104,6 +105,8 @@ export function SheetCustomers({ sheet }: { sheet: SheetLeads }) {
           </button>
         </div>
       )}
+
+      <ColumnWarning missing={sheet.missing} />
 
       <StatGrid stats={stats} className="grid-cols-1 @xl/main:grid-cols-3 @5xl/main:grid-cols-3" />
 

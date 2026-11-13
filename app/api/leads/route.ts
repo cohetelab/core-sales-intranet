@@ -25,7 +25,7 @@ export async function GET(req: Request) {
     const headers = { ETag: etag, "Cache-Control": "private, no-store" };
     if (req.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers });
     return NextResponse.json(
-      { user, customers: snap.customers, meta: snap.meta, fetchedAt: snap.fetchedAt, sheetUrl: snap.sheetUrl, gid: snap.gid },
+      { user, customers: snap.customers, meta: snap.meta, missing: snap.missing, fetchedAt: snap.fetchedAt, sheetUrl: snap.sheetUrl, gid: snap.gid },
       { headers }
     );
   } catch (error) {

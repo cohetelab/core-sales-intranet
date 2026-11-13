@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { ArrowRightIcon, ChevronRightIcon, CircleIcon, RefreshCw } from "lucide-react";
 
+import { ColumnWarning } from "@/components/column-warning";
 import type { SheetLeads } from "@/components/sheet-leads-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -96,6 +97,8 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
           </button>
         </div>
       )}
+
+      <ColumnWarning missing={sheet.missing} />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_1.6fr_1fr]">
         <Card className="shadow-xs">

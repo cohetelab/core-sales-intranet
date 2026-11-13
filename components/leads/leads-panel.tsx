@@ -62,6 +62,7 @@ import {
   type MetaSheetConfig,
 } from "@/lib/meta-leads";
 import { OWNER_OPTIONS, SALES_REPS, UNASSIGNED } from "@/lib/sales-reps";
+import { ColumnWarning } from "@/components/column-warning";
 import { useSheetLeads } from "@/components/sheet-leads-provider";
 import type { Customer } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -439,6 +440,8 @@ export function LeadsPanel() {
           </div>
         )}
       </div>
+
+      {sheetMode && <ColumnWarning missing={sheet.missing} />}
 
       <StatGrid stats={summary} />
 

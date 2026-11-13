@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { FIELD_LABEL, type FieldKey } from "@/lib/lead-fields";
+import type { MissingColumn } from "@/lib/lead-sheet";
 import { UNASSIGNED } from "@/lib/sales-reps";
 import type { Customer, DealStage } from "@/lib/types";
 
@@ -49,6 +50,7 @@ type ListResponse = {
   user: string;
   customers: Customer[];
   meta: Record<string, LeadMeta>;
+  missing?: MissingColumn[];
   fetchedAt: string;
   sheetUrl: string;
   gid: number;
@@ -80,6 +82,7 @@ export function useSheetLeadsState(active: boolean) {
   const [user, setUser] = React.useState<string | null>(null);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [meta, setMeta] = React.useState<Record<string, LeadMeta>>({});
+  const [missing, setMissing] = React.useState<MissingColumn[]>([]);
   const [sheetUrl, setSheetUrl] = React.useState("");
   const [gid, setGid] = React.useState(0);
   const [fetchedAt, setFetchedAt] = React.useState<string | null>(null);
@@ -122,6 +125,7 @@ export function useSheetLeadsState(active: boolean) {
       setUser(data.user);
       setCustomers(data.customers);
       setMeta(data.meta);
+      setMissing(data.missing ?? []);
       setSheetUrl(data.sheetUrl);
       setGid(data.gid);
       setFetchedAt(data.fetchedAt);
@@ -319,7 +323,7 @@ export function useSheetLeadsState(active: boolean) {
   );
 
   return {
-    status, user, customers, meta, sheetUrl, gid, fetchedAt, refreshing, notice, csvMode, setCsvMode, savingIds, savedAt,
+    status, user, customers, meta, missing, sheetUrl, gid, fetchedAt, refreshing, notice, csvMode, setCsvMode, savingIds, savedAt,
     dismissNotice: () => setNotice(null),
     refresh, login, logout, assign, convert, moveStage, record,
   };

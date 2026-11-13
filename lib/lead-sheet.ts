@@ -66,7 +66,7 @@ export type LeadParseStats = {
 };
 
 export type LeadParseResult =
-  | { ok: true; records: LeadRecord[]; stats: LeadParseStats }
+  | { ok: true; records: LeadRecord[]; stats: LeadParseStats; missing: MissingColumn[] }
   | { ok: false; error: string };
 
 const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
@@ -99,6 +99,31 @@ const ALIASES = {
 } as const;
 
 type ColKey = keyof typeof ALIASES;
+
+// 시트에서 칸을 못 찾았을 때 화면에 알려 줄 내용. optional 칸(이메일·예산·문의·문의 종류)은 없어도 알리지 않는다.
+const COLUMN_INFO: Record<ColKey, { label: string; impact: string; level: "important" | "optional" }> = {
+  date: { label: "날짜", impact: "문의 시각을 알 수 없어 최근 문의와 응답 속도가 틀려집니다", level: "important" },
+  company: { label: "상호명", impact: "", level: "important" },
+  phone: { label: "연락처", impact: "같은 고객의 재문의를 합치지 못합니다", level: "important" },
+  email: { label: "이메일", impact: "", level: "optional" },
+  stage: { label: "단계", impact: "파이프라인 단계를 시트에서 읽고 쓸 수 없습니다", level: "important" },
+  service: { label: "서비스 구분", impact: "서비스별 분석이 '미분류'로 나옵니다", level: "important" },
+  channel: { label: "유입 경로", impact: "채널별 분석이 '기타'로 나옵니다", level: "important" },
+  budget: { label: "예산", impact: "", level: "optional" },
+  inquiry: { label: "문의", impact: "", level: "optional" },
+  inquiryType: { label: "문의 종류", impact: "", level: "optional" },
+  owner: { label: "담당자", impact: "담당 배정을 읽고 쓸 수 없습니다", level: "important" },
+  probability: { label: "가능성", impact: "가능성을 읽고 쓸 수 없습니다", level: "important" },
+  lastContact: { label: "최근 연락일", impact: "최근 연락일을 읽고 쓸 수 없습니다", level: "important" },
+  retouch: { label: "리터치 일정", impact: "리터치 일정과 일정관리가 비어 보입니다", level: "important" },
+  consult: { label: "1차 상담 내용", impact: "상담 히스토리를 읽고 쓸 수 없습니다", level: "important" },
+  nextAction: { label: "다음 액션 플랜", impact: "다음 액션을 읽고 쓸 수 없습니다", level: "important" },
+  contract: { label: "계약 금액", impact: "계약 금액과 계약 판정이 비어 보입니다", level: "important" },
+  memo: { label: "메모", impact: "메모를 읽고 쓸 수 없습니다", level: "important" },
+};
+
+// 시트의 맨 윗줄에서 찾지 못한 칸(열 이름이 바뀌었거나 지워졌을 때). accepts는 인트라넷이 알아보는 이름들이다.
+export type MissingColumn = { key: string; label: string; impact: string; accepts: string[] };
 
 function pad(n: number | string, len = 2) {
   return String(n).padStart(len, "0");
@@ -207,6 +232,9 @@ export function parseInquiryRows(rows: string[][], trackRows = true): LeadParseR
     if (idx >= 0) col[key] = idx;
   }
   if (col.company === undefined) return { ok: false, error: "'상호명' 컬럼이 없습니다." };
+  const missing: MissingColumn[] = (Object.keys(ALIASES) as ColKey[])
+    .filter((key) => col[key] === undefined && COLUMN_INFO[key].level === "important")
+    .map((key) => ({ key, label: COLUMN_INFO[key].label, impact: COLUMN_INFO[key].impact, accepts: [...ALIASES[key]] }));
 
   const stats: LeadParseStats = {
     rows: 0, imported: 0, skippedEmpty: 0, skippedTest: 0, mergedRows: 0,
@@ -306,7 +334,7 @@ export function parseInquiryRows(rows: string[][], trackRows = true): LeadParseR
 
   const records = Array.from(groups.values());
   for (const r of records) r.inquiries.sort((a, b) => a.at.localeCompare(b.at));
-  return { ok: true, records, stats };
+  return { ok: true, records, stats, missing };
 }
 
 // 리드 기록 → 앱의 고객(리드 단계). 영업이 앱에서 나중에 바꾸는 값(담당·단계 등)은 병합 때 보존한다.

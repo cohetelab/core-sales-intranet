@@ -4,6 +4,7 @@ import * as React from "react";
 import { GripVerticalIcon, RefreshCw, SearchIcon } from "lucide-react";
 
 import { LeadDetailSheet } from "@/components/leads/lead-detail-sheet";
+import { ColumnWarning } from "@/components/column-warning";
 import type { SheetLeads } from "@/components/sheet-leads-provider";
 import { StatGrid, type Stat } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
@@ -295,6 +296,8 @@ export function SheetPipeline({ sheet }: { sheet: SheetLeads }) {
           </button>
         </div>
       )}
+
+      <ColumnWarning missing={sheet.missing} />
 
       {blockNote && (
         <div role="alert" className="flex items-start justify-between gap-3 rounded-2xl bg-muted px-3 py-2 text-xs text-foreground">

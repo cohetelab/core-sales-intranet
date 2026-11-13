@@ -3,6 +3,7 @@
 import * as React from "react";
 import { ExternalLinkIcon, RefreshCw } from "lucide-react";
 
+import { ColumnWarning } from "@/components/column-warning";
 import type { SheetLeads } from "@/components/sheet-leads-provider";
 import { StatGrid, type Stat } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
@@ -130,6 +131,8 @@ export function SheetReports({ sheet }: { sheet: SheetLeads }) {
           </button>
         </div>
       )}
+
+      <ColumnWarning missing={sheet.missing} />
 
       <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="기간">
         {PERIODS.map((p) => (

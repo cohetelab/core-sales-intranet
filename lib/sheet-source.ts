@@ -3,7 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import { FIELD_COLUMN, FIELD_KEYS, STAGE_SHEET_VALUE, type FieldKey } from "@/lib/lead-fields";
-import { parseInquiryRows, recordToCustomer, type LeadRecord } from "@/lib/lead-sheet";
+import { parseInquiryRows, recordToCustomer, type LeadRecord, type MissingColumn } from "@/lib/lead-sheet";
 import { UNASSIGNED } from "@/lib/sales-reps";
 import type { Customer, DealStage } from "@/lib/types";
 
@@ -65,6 +65,7 @@ export type Snapshot = {
   // 고객 id → 시트에서 가장 최근 문의 행(시트에서 보기 링크용)과 그 행의 수기 칸 원문(기록 폼의 기준값)
   meta: Record<string, { row: number; raw: Partial<Record<FieldKey, string>> }>;
   records: Map<string, LeadRecord>; // 서버 안에서만 쓴다(쓰기 때 행 확인)
+  missing: MissingColumn[]; // 시트 맨 윗줄에서 찾지 못한 칸
   fetchedAt: string;
   sheetUrl: string;
   gid: number;
@@ -96,9 +97,9 @@ export async function getSnapshot(options: { fresh?: boolean; maxAgeMs?: number 
   }
   const sheetUrl = typeof data.sheetUrl === "string" ? data.sheetUrl : "";
   const gid = typeof data.gid === "number" ? data.gid : 0;
-  const etag = createHash("sha1").update(JSON.stringify(customers)).update(JSON.stringify(meta)).update(sheetUrl).digest("hex").slice(0, 20);
+  const etag = createHash("sha1").update(JSON.stringify(customers)).update(JSON.stringify(meta)).update(JSON.stringify(parsed.missing)).update(sheetUrl).digest("hex").slice(0, 20);
 
-  const value: Snapshot = { customers, meta, records, fetchedAt, sheetUrl, gid, etag };
+  const value: Snapshot = { customers, meta, records, missing: parsed.missing, fetchedAt, sheetUrl, gid, etag };
   cache = { at: Date.now(), value };
   return value;
 }
