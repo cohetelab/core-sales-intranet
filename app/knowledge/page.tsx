@@ -1,8 +1,8 @@
-import { baaldaServerUrl } from "@/lib/baalda";
-import { KnowledgeConnection } from "@/components/knowledge/knowledge-connection";
+import { knowledgeConfig } from "@/lib/knowledge-auth";
+import { KnowledgeWorkspace } from "@/components/knowledge/knowledge-workspace";
 
 export const dynamic = "force-dynamic";
 
 export default function KnowledgePage() {
-  return <KnowledgeConnection serverUrl={baaldaServerUrl()} />;
+  return <KnowledgeWorkspace config={knowledgeConfig()} />;
 }
