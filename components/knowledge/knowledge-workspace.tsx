@@ -201,4 +201,3 @@ export function KnowledgeWorkspace({ config }: { config: Config }) {
   </main>;
 }
 
-\n
