@@ -76,6 +76,9 @@ type StageFilter = "lead" | "discovery" | "proposal" | "won" | "all" | "failed";
 type DueFilter = "all" | "overdue" | "today" | "week";
 
 const FAILED_TAG = "실패/종료";
+// 퇴사 등으로 앱 영업이 아닌 사람이 담당이던 리드(시트의 담당자가 앱 영업이 아니라서 미배정으로 읽히고 '이전 담당' 태그가 붙는다)
+const FORMER = "former";
+const isFormer = (c: Customer) => c.owner === UNASSIGNED && c.tags.some((t) => t.startsWith("이전 담당:"));
 const STAGE_CHIPS: { id: StageFilter; label: string }[] = [
   { id: "all", label: "전체 단계" },
   { id: "lead", label: "리드" },
@@ -188,7 +191,7 @@ export function LeadsPanel() {
   );
   const matchesService = (c: Customer, f: ServiceFilter) =>
     f === "all" || (f === UNCLASSIFIED ? c.category === UNCLASSIFIED : c.category.includes(f));
-  const matchesOwner = (c: Customer, f: OwnerFilter) => f === "all" || c.owner === f;
+  const matchesOwner = (c: Customer, f: OwnerFilter) => f === "all" || (f === FORMER ? isFormer(c) : c.owner === f);
 
   const filtered = React.useMemo(
     () => scoped.filter((c) => matchesQuery(c) && matchesService(c, service) && matchesOwner(c, owner)),
@@ -206,6 +209,7 @@ export function LeadsPanel() {
     const base = scoped.filter((c) => matchesQuery(c) && matchesService(c, service));
     const map = new Map<string, number>([["all", base.length]]);
     for (const o of OWNER_OPTIONS) map.set(o, base.filter((c) => c.owner === o).length);
+    map.set(FORMER, base.filter(isFormer).length);
     return map;
   }, [scoped, matchesQuery, service]);
   const stageCounts = React.useMemo(() => {
@@ -642,9 +646,9 @@ export function LeadsPanel() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="담당 필터">
-              {(["all", ...OWNER_OPTIONS] as OwnerFilter[]).map((f) => (
+              {(["all", ...OWNER_OPTIONS, ...((ownerCounts.get(FORMER) ?? 0) > 0 || owner === FORMER ? [FORMER] : [])] as OwnerFilter[]).map((f) => (
                 <Chip key={f} active={owner === f} onClick={() => { setOwner(f); resetPage(); }}>
-                  {f === "all" ? "전체 담당" : f}
+                  {f === "all" ? "전체 담당" : f === FORMER ? "이전 담당(퇴사자)" : f}
                   <span className="tabular-nums opacity-70">{(ownerCounts.get(f) ?? 0).toLocaleString("ko-KR")}</span>
                 </Chip>
               ))}
