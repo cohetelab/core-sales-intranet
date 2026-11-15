@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import {
   AlertCircleIcon,
+  ArchiveIcon,
   CalendarDaysIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -50,6 +51,7 @@ import { SOURCE_LABEL, STAGE_LABEL } from "@/lib/mock-data";
 import { useCustomerStore } from "@/lib/customer-store";
 import { formatDateTime, formatKst } from "@/lib/format";
 import { CHECKS, loadByOwner, matchesCheck, runChecks, type CheckId } from "@/lib/lead-checks";
+import { CLEANUP_DAYS, CLOSE_REASONS, DEFAULT_CLEANUP_DAYS, cleanupCounts, idleDays, isCleanupCandidate, lastMoveMs } from "@/lib/lead-cleanup";
 import { todayKst } from "@/lib/lead-fields";
 import { WINDOW_DAYS, formatDuration, responseStats } from "@/lib/lead-response";
 import { CHANNELS, SERVICE_LABELS, planBalancedAssignment } from "@/lib/lead-sheet";
@@ -140,6 +142,9 @@ export function LeadsPanel() {
   const [scheduleOnly, setScheduleOnly] = React.useState(false);
   const [due, setDue] = React.useState<DueFilter>("all");
   const [check, setCheck] = React.useState<CheckId | null>(null);
+  const [cleanup, setCleanup] = React.useState(false);
+  const [cleanupDays, setCleanupDays] = React.useState<number>(DEFAULT_CLEANUP_DAYS);
+  const [closeReason, setCloseReason] = React.useState("none");
   const [nowMs] = React.useState(() => Date.now());
   const [page, setPage] = React.useState(0);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -153,6 +158,13 @@ export function LeadsPanel() {
 
   // 신규 리드(리드 단계). 담당 건수 계산과 요약 카드에 쓴다.
   const leads = React.useMemo(() => customers.filter((c) => c.stage === "lead"), [customers]);
+  React.useEffect(() => {
+    if (window.location.hash === "#cleanup") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCleanup(true);
+      setStage("all");
+    }
+  }, []);
 
   const today = todayKst();
   const matchesStage = (c: Customer, f: StageFilter) => (f === "all" ? true : f === "failed" ? isFailed(c) : c.stage === f);
@@ -169,10 +181,12 @@ export function LeadsPanel() {
   const scoped = React.useMemo(
     () =>
       customers
-        .filter((c) => matchesStage(c, stage) && matchesDue(c, due) && (!check || matchesCheck(check, c, nowMs, today)))
-        .sort((a, b) => (scheduleOnly ? dueDay(a).localeCompare(dueDay(b)) : a.createdAt < b.createdAt ? 1 : -1)),
+        .filter((c) => matchesStage(c, stage) && matchesDue(c, due) && (!check || matchesCheck(check, c, nowMs, today)) && (!cleanup || isCleanupCandidate(c, nowMs, cleanupDays)))
+        .sort((a, b) =>
+          cleanup ? lastMoveMs(a, nowMs) - lastMoveMs(b, nowMs) : scheduleOnly ? dueDay(a).localeCompare(dueDay(b)) : a.createdAt < b.createdAt ? 1 : -1
+        ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [customers, stage, scheduleOnly, due, today, check, nowMs]
+    [customers, stage, scheduleOnly, due, today, check, nowMs, cleanup, cleanupDays]
   );
 
   const matchesQuery = React.useCallback(
@@ -213,10 +227,10 @@ export function LeadsPanel() {
     return map;
   }, [scoped, matchesQuery, service]);
   const stageCounts = React.useMemo(() => {
-    const base = customers.filter((c) => matchesQuery(c) && matchesService(c, service) && matchesOwner(c, owner) && matchesDue(c, due) && (!check || matchesCheck(check, c, nowMs, today)));
+    const base = customers.filter((c) => matchesQuery(c) && matchesService(c, service) && matchesOwner(c, owner) && matchesDue(c, due) && (!check || matchesCheck(check, c, nowMs, today)) && (!cleanup || isCleanupCandidate(c, nowMs, cleanupDays)));
     return new Map<StageFilter, number>(STAGE_CHIPS.map((s) => [s.id, base.filter((c) => matchesStage(c, s.id)).length]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customers, matchesQuery, service, owner, scheduleOnly, due, today, check, nowMs]);
+  }, [customers, matchesQuery, service, owner, scheduleOnly, due, today, check, nowMs, cleanup, cleanupDays]);
   const dueCounts = React.useMemo(() => {
     const base = customers.filter((c) => matchesStage(c, stage) && matchesQuery(c) && matchesService(c, service) && matchesOwner(c, owner));
     const days = base.filter((c) => dueDay(c) && !isFailed(c)).map(dueDay);
@@ -260,10 +274,23 @@ export function LeadsPanel() {
   const checkCounts = React.useMemo(() => runChecks(customers, nowMs, today), [customers, nowMs, today]);
   const ownerLoad = React.useMemo(() => loadByOwner(customers), [customers]);
   const response = React.useMemo(() => responseStats(customers, nowMs), [customers, nowMs]);
+  const cleanupCount = React.useMemo(() => cleanupCounts(customers, nowMs), [customers, nowMs]);
+  function toggleCleanup() {
+    // 정리 대기함: 오래 움직임이 없는 리드(종료 후보)를 가장 오래된 순으로 모아 보여 준다. 끄면 신규 리드로 돌아간다.
+    const next = !cleanup;
+    setCleanup(next);
+    setCheck(null);
+    setScheduleOnly(false);
+    setDue("all");
+    setStage(next ? "all" : "lead");
+    setSelected(new Set());
+    resetPage();
+  }
   function toggleCheck(id: CheckId) {
     // 점검 항목을 누르면 그 조건에 해당하는 고객만 표에 모아 보여 준다. 같은 항목을 다시 누르면 해제.
     const next = check === id ? null : id;
     setCheck(next);
+    setCleanup(false);
     if (next) {
       setScheduleOnly(false);
       setDue("all");
@@ -278,6 +305,7 @@ export function LeadsPanel() {
     // 일정관리를 켜면 모든 단계에서 리터치 일정이 있는 고객을 날짜순으로 보여 주고, 끄면 신규 리드로 돌아간다.
     const next = !scheduleOnly;
     setCheck(null);
+    setCleanup(false);
     setScheduleOnly(next);
     setDue("all");
     setStage(next ? "all" : "lead");
@@ -388,18 +416,22 @@ export function LeadsPanel() {
 
   const statusScreen = renderSheetStatus(sheet);
   if (statusScreen) return statusScreen;
-  const showStage = stage === "all" || stage === "failed" || scheduleOnly;
+  const showStage = stage === "all" || stage === "failed" || scheduleOnly || cleanup;
   const detail = sheetMode && detailId ? (customers.find((c) => c.id === detailId) ?? null) : null;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
-          {scheduleOnly ? "리터치 일정이 있는 고객 · 날짜순" : stage === "lead" ? "아직 상담이 시작되지 않은 신규 리드" : stage === "all" ? "모든 단계의 고객" : `${stage === "failed" ? FAILED_TAG : STAGE_LABEL[stage]} 단계 고객`} · 총 {scoped.length.toLocaleString("ko-KR")}건
+          {cleanup ? `${cleanupDays}일 넘게 움직임이 없는 리드 · 종료 후보` : scheduleOnly ? "리터치 일정이 있는 고객 · 날짜순" : stage === "lead" ? "아직 상담이 시작되지 않은 신규 리드" : stage === "all" ? "모든 단계의 고객" : `${stage === "failed" ? FAILED_TAG : STAGE_LABEL[stage]} 단계 고객`} · 총 {scoped.length.toLocaleString("ko-KR")}건
           {filtered.length !== scoped.length && <> · 조건에 맞는 {filtered.length.toLocaleString("ko-KR")}건</>}
         </p>
         {sheetMode ? (
           <div className="flex flex-wrap gap-2">
+            <Button variant={cleanup ? "default" : "outline"} className="h-9 py-2" aria-pressed={cleanup} onClick={toggleCleanup}>
+              <ArchiveIcon className="size-3.5" /> 정리 대기함
+              <span className="tabular-nums opacity-80">{(cleanupCount[cleanupDays] ?? 0).toLocaleString("ko-KR")}</span>
+            </Button>
             <Button variant={scheduleOnly ? "default" : "outline"} className="h-9 py-2" aria-pressed={scheduleOnly} onClick={toggleSchedule}>
               <CalendarDaysIcon className="size-3.5" /> 일정관리
             </Button>
@@ -605,12 +637,23 @@ export function LeadsPanel() {
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="단계 필터">
             {STAGE_CHIPS.map((s) => (
-              <Chip key={s.id} active={stage === s.id} onClick={() => { setStage(s.id); resetPage(); }}>
+              <Chip key={s.id} active={stage === s.id} onClick={() => { setStage(s.id); if (s.id === "failed") setCleanup(false); resetPage(); }}>
                 {s.label}
                 <span className="tabular-nums opacity-70">{(stageCounts.get(s.id) ?? 0).toLocaleString("ko-KR")}</span>
               </Chip>
             ))}
           </div>
+          {cleanup && (
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="정리 기준">
+              {CLEANUP_DAYS.map((d) => (
+                <Chip key={d} active={cleanupDays === d} onClick={() => { setCleanupDays(d); setSelected(new Set()); resetPage(); }}>
+                  {d}일 이상
+                  <span className="tabular-nums opacity-70">{(cleanupCount[d] ?? 0).toLocaleString("ko-KR")}</span>
+                </Chip>
+              ))}
+              <span className="text-xs text-muted-foreground">마지막 문의·연락·상담 기록 이후 움직임이 없고 예정된 일정이 없는 리드입니다. 종료는 확인한 뒤에만 됩니다.</span>
+            </div>
+          )}
           {scheduleOnly && (
             <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="일정 필터">
               {DUE_CHIPS.map((d) => (
@@ -679,6 +722,12 @@ export function LeadsPanel() {
         </div>
       )}
 
+      {sheet.bulk && (
+        <div role="status" className="rounded-2xl bg-muted px-3 py-2 text-xs">
+          {sheet.bulk.label} 중… {sheet.bulk.done.toLocaleString("ko-KR")} / {sheet.bulk.total.toLocaleString("ko-KR")}건 (창을 닫지 마세요)
+        </div>
+      )}
+
       {selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-primary/5 px-3 py-2 text-sm ring-1 ring-primary/20">
           <span className="font-medium">{selected.size.toLocaleString("ko-KR")}건 선택됨</span>
@@ -697,6 +746,64 @@ export function LeadsPanel() {
           <Button size="sm" className="h-8" onClick={assignSelected}>
             담당 배정
           </Button>
+          {sheetMode && stage !== "failed" && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="outline" className="h-8">
+                  종료 처리
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{selected.size.toLocaleString("ko-KR")}건을 종료 처리할까요?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    시트의 &lsquo;단계&rsquo; 칸이 &lsquo;실패/종료&rsquo;로 바뀌고 이 목록에서 사라집니다. 종료 보기에서 &lsquo;종료 해제&rsquo;로 되돌릴 수 있고, 같은 사람이 다시 문의하면 자동으로 되살아납니다.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">종료 사유(선택) — 상담 기록에 한 줄로 남습니다</p>
+                  <Select value={closeReason} onValueChange={setCloseReason}>
+                    <SelectTrigger className="h-8 w-48 text-xs" aria-label="종료 사유">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">사유 기록 안 함</SelectItem>
+                      {CLOSE_REASONS.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {r}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>취소</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      const reason = (CLOSE_REASONS as readonly string[]).includes(closeReason) ? (closeReason as (typeof CLOSE_REASONS)[number]) : null;
+                      void sheet.closeLeads(Array.from(selected), reason);
+                      setSelected(new Set());
+                    }}
+                  >
+                    종료 처리
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+          {sheetMode && stage === "failed" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
+              onClick={() => {
+                void sheet.reopenLeads(Array.from(selected));
+                setSelected(new Set());
+              }}
+            >
+              종료 해제
+            </Button>
+          )}
           <Button size="sm" variant="ghost" className="h-8" onClick={() => setSelected(new Set())}>
             선택 해제
           </Button>
@@ -728,12 +835,13 @@ export function LeadsPanel() {
                   <TableHead>다음 액션</TableHead>
                   {showStage && <TableHead className="w-20 text-center">단계</TableHead>}
                   {scheduleOnly && <TableHead className="w-28">리터치 일정</TableHead>}
+                  {cleanup && <TableHead className="w-32">마지막 움직임</TableHead>}
                   <TableHead className="w-24 text-center">계약</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((c) => {
-                  const note = c.tags.filter((t) => /^(재문의|이전 담당)/.test(t));
+                  const note = c.tags.filter((t) => /^(재문의|이전 담당|종료 후 재문의)/.test(t));
                   const owners = OWNER_OPTIONS.includes(c.owner) ? OWNER_OPTIONS : [...OWNER_OPTIONS, c.owner];
                   return (
                     <TableRow key={c.id} data-state={selected.has(c.id) ? "selected" : undefined}>
@@ -795,6 +903,9 @@ export function LeadsPanel() {
                         <TableCell className={cn("text-xs tabular-nums whitespace-nowrap", dueDay(c) < today ? "text-destructive" : "text-muted-foreground")}>
                           {dueDay(c) || "-"}{dueDay(c) && dueDay(c) < today ? " (지남)" : ""}
                         </TableCell>
+                      )}
+                      {cleanup && (
+                        <TableCell className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">{idleDays(c, nowMs).toLocaleString("ko-KR")}일 전</TableCell>
                       )}
                       <TableCell className="text-center">
                         {c.stage === "won" ? (

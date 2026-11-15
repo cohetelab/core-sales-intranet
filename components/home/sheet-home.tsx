@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { IRM_LIMIT, useCreatorIrm } from "@/lib/creator-irm-store";
 import { formatDateTime, formatKst } from "@/lib/format";
 import { CHECKS, runChecks } from "@/lib/lead-checks";
+import { DEFAULT_CLEANUP_DAYS, cleanupCounts } from "@/lib/lead-cleanup";
 import { formatContract, todayKst } from "@/lib/lead-fields";
 import { agoFrom, homeSummary } from "@/lib/lead-home";
 import { formatDuration, responseStats } from "@/lib/lead-response";
@@ -50,6 +51,7 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
   const s = React.useMemo(() => homeSummary(sheet.customers, today), [sheet.customers, today]);
   const checks = React.useMemo(() => runChecks(sheet.customers, nowMs, today), [sheet.customers, nowMs, today]);
   const response = React.useMemo(() => responseStats(sheet.customers, nowMs), [sheet.customers, nowMs]);
+  const cleanupN = React.useMemo(() => cleanupCounts(sheet.customers, nowMs)[DEFAULT_CLEANUP_DAYS] ?? 0, [sheet.customers, nowMs]);
   const months = React.useMemo(() => monthly(inWindow(sheet.customers, nowMs, null)).slice(0, 6).reverse(), [sheet.customers, nowMs]);
 
   const todayLabel = new Date(`${today}T12:00:00+09:00`).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "long" });
@@ -99,6 +101,20 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
       )}
 
       <ColumnWarning missing={sheet.missing} />
+
+      {cleanupN > 0 && (
+        <div role="note" aria-label="정리 대기" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-muted px-4 py-3 text-sm">
+          <p>
+            <strong className="font-semibold tabular-nums">정리 대기 {n(cleanupN)}건</strong>
+            <span className="text-muted-foreground"> · {DEFAULT_CLEANUP_DAYS}일 넘게 움직임이 없는 리드입니다. 확인하고 종료하면 점검과 파이프라인 숫자가 실제 현황에 가까워집니다.</span>
+          </p>
+          <Button asChild size="sm" className="h-8">
+            <Link href="/leads#cleanup">
+              정리 대기함 열기 <ArrowRightIcon className="size-3.5" />
+            </Link>
+          </Button>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_1.6fr_1fr]">
         <Card className="shadow-xs">

@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { FIELD_LABEL, type FieldKey } from "@/lib/lead-fields";
+import type { CloseReason } from "@/lib/lead-cleanup";
 import type { MissingColumn } from "@/lib/lead-sheet";
 import { UNASSIGNED } from "@/lib/sales-reps";
 import type { Customer, DealStage } from "@/lib/types";
@@ -91,6 +92,7 @@ export function useSheetLeadsState(active: boolean) {
   // 시트에 쓰는 중인 고객과, 마지막으로 시트에 저장된 시각(화면에 "저장 중/저장됨"을 보여 주는 용도)
   const [savingIds, setSavingIds] = React.useState<ReadonlySet<string>>(new Set());
   const [savedAt, setSavedAt] = React.useState<string | null>(null);
+  const [bulk, setBulk] = React.useState<{ label: string; done: number; total: number } | null>(null);
 
   const etag = React.useRef<string | null>(null);
   const pending = React.useRef(0); // 쓰기가 진행 중이면 갱신 결과를 화면에 적용하지 않는다
@@ -252,6 +254,33 @@ export function useSheetLeadsState(active: boolean) {
     [customers, load]
   );
 
+  // 종료 처리·종료 해제: 고객이 많아도 서버 한 번의 요청 한도(150명)를 넘지 않게 나눠서 보낸다. 진행 상황은 bulk로 알려 준다.
+  const FAILED = "실패/종료";
+  const runBulk = React.useCallback(
+    async (label: string, action: "close" | "reopen", ids: string[], reason: CloseReason | null) => {
+      const BATCH = 100;
+      setBulk({ label, done: 0, total: ids.length });
+      try {
+        for (let i = 0; i < ids.length; i += BATCH) {
+          const part = ids.slice(i, i + BATCH);
+          const data = await write(
+            "/api/leads/close",
+            { ids: part, action, ...(reason ? { reason } : {}) },
+            part,
+            (c) => ({ ...c, tags: action === "close" ? (c.tags.includes(FAILED) ? c.tags : [...c.tags, FAILED]) : c.tags.filter((t) => t !== FAILED) })
+          );
+          if (!data) break; // 실패하면 거기서 멈춘다(오류 안내는 write가 띄운다)
+          setBulk({ label, done: Math.min(i + BATCH, ids.length), total: ids.length });
+        }
+      } finally {
+        setBulk(null);
+      }
+    },
+    [write]
+  );
+  const closeLeads = React.useCallback((ids: string[], reason: CloseReason | null) => runBulk("종료 처리", "close", ids, reason), [runBulk]);
+  const reopenLeads = React.useCallback((ids: string[]) => runBulk("종료 해제", "reopen", ids, null), [runBulk]);
+
   const assign = React.useCallback(
     (ids: string[], owner: string) =>
       write("/api/leads/assign", { ids, owner }, ids, (c) => ({
@@ -323,8 +352,8 @@ export function useSheetLeadsState(active: boolean) {
   );
 
   return {
-    status, user, customers, meta, missing, sheetUrl, gid, fetchedAt, refreshing, notice, csvMode, setCsvMode, savingIds, savedAt,
+    status, user, customers, meta, missing, sheetUrl, gid, fetchedAt, refreshing, notice, csvMode, setCsvMode, savingIds, savedAt, bulk,
     dismissNotice: () => setNotice(null),
-    refresh, login, logout, assign, convert, moveStage, record,
+    refresh, login, logout, assign, convert, moveStage, record, closeLeads, reopenLeads,
   };
 }

@@ -48,6 +48,8 @@ export type LeadRecord = {
   probability?: string;
   contractAmount?: string;
   failed?: boolean;
+  failedAt?: string; // 종료로 표시된 행 중 가장 늦은 문의 시각
+  reopened?: boolean; // 종료한 뒤에 다시 문의가 들어와 활성으로 되돌린 고객
   memo?: string;
   stage?: DealStage; // 시트 '단계' 칸에서 읽은 값(없으면 리드)
   rowRefs: LeadRowRef[]; // 시트에서 직접 읽었을 때만 채워진다
@@ -325,7 +327,10 @@ export function parseInquiryRows(rows: string[][], trackRows = true): LeadParseR
     rec.contractAmount = clean(get(row, "contract")) || rec.contractAmount;
     rec.memo = clean(get(row, "memo")) || rec.memo;
     const stageText = clean(get(row, "stage"));
-    if (/실패|종료/.test(stageText)) rec.failed = true;
+    if (/실패|종료/.test(stageText)) {
+      rec.failed = true;
+      if (!rec.failedAt || when > rec.failedAt) rec.failedAt = when;
+    }
     if (/계약/.test(stageText)) rec.stage = "won";
     else if (rec.stage !== "won" && /제안/.test(stageText)) rec.stage = "proposal";
     else if (!rec.stage && /상담/.test(stageText)) rec.stage = "discovery";
@@ -334,6 +339,13 @@ export function parseInquiryRows(rows: string[][], trackRows = true): LeadParseR
 
   const records = Array.from(groups.values());
   for (const r of records) r.inquiries.sort((a, b) => a.at.localeCompare(b.at));
+  // 종료한 고객이 다시 문의하면(종료한 행보다 나중 문의가 있으면) 숨기지 않고 활성 고객으로 되살린다.
+  for (const r of records) {
+    if (r.failed && r.failedAt && (r.inquiries[r.inquiries.length - 1]?.at ?? "") > r.failedAt) {
+      r.failed = false;
+      r.reopened = true;
+    }
+  }
   return { ok: true, records, stats, missing };
 }
 
@@ -350,6 +362,7 @@ export function recordToCustomer(r: LeadRecord, nowIso = new Date().toISOString(
   if (r.probability) tags.push(`가능성 ${r.probability}`);
   if (r.contractAmount) tags.push(`계약금액 ${r.contractAmount}`);
   if (r.failed) tags.push("실패/종료");
+  if (r.reopened) tags.push("종료 후 재문의");
 
   const seen = new Map<string, number>();
   const inquiryActs: Activity[] = r.inquiries.map((q) => {
@@ -394,7 +407,7 @@ export function recordToCustomer(r: LeadRecord, nowIso = new Date().toISOString(
 }
 
 // 시트에서 다시 가져올 때 쓰는 병합: 앱에서 영업이 바꾼 값(담당·단계·태그·메모)은 지키고, 새 문의 이력만 더한다.
-const DYNAMIC_TAG = /^(재문의 \d+회|가능성 |계약금액 |이전 담당: |실패\/종료$)/;
+const DYNAMIC_TAG = /^(재문의 \d+회|가능성 |계약금액 |이전 담당: |실패\/종료$|종료 후 재문의$)/;
 const PLACEHOLDER_NEXT = new Set(["첫 컨택 필요", "담당자 배정 필요"]);
 
 export function mergeImportedCustomer(existing: Customer, incoming: Customer): Customer {

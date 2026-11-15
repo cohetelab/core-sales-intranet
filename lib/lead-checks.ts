@@ -10,11 +10,12 @@ export type CheckId = "unassigned" | "noContact" | "overdue" | "stale" | "noAmou
 export const DAY_MS = 86_400_000;
 export const FIRST_CONTACT_HOURS = 24;
 export const STALE_DAYS = 14;
+export const RECENT_DAYS = 30; // 미배정·첫 컨택 점검은 최근 문의만 본다(오래된 리드는 정리 대기함이 맡는다)
 const FAILED_TAG = "실패/종료";
 
 export const CHECKS: { id: CheckId; label: string; hint: string; tone: "danger" | "warning" | "neutral" }[] = [
-  { id: "unassigned", label: "24시간 넘게 미배정", hint: "들어온 지 24시간이 지났는데 담당자가 없는 리드", tone: "danger" },
-  { id: "noContact", label: "첫 컨택 기록 없음", hint: "담당은 있는데 24시간이 지나도록 상담 내용·다음 액션 기록이 없는 리드", tone: "danger" },
+  { id: "unassigned", label: "24시간 넘게 미배정", hint: "최근 30일에 들어온 리드 중 24시간이 지났는데 담당자가 없는 리드", tone: "danger" },
+  { id: "noContact", label: "첫 컨택 기록 없음", hint: "최근 30일에 들어온 리드 중 담당은 있는데 24시간이 지나도록 상담 내용·다음 액션 기록이 없는 리드", tone: "danger" },
   { id: "overdue", label: "리터치 일정 지남", hint: "리터치 일정 날짜가 지났고 아직 계약 전인 고객", tone: "warning" },
   { id: "stale", label: "14일 넘게 활동 없음", hint: "상담·제안 단계에서 14일 넘게 움직임이 없는 고객", tone: "warning" },
   { id: "noAmount", label: "계약 금액 미기재", hint: "계약 단계인데 계약 금액이 비어 있는 고객", tone: "neutral" },
@@ -33,12 +34,13 @@ export function matchesCheck(id: CheckId, c: Customer, now: number, today: strin
   if (failed(c)) return false;
   switch (id) {
     case "unassigned":
-      return c.stage === "lead" && c.owner === UNASSIGNED && ageMs(c.createdAt, now) >= FIRST_CONTACT_HOURS * 3_600_000;
+      return c.stage === "lead" && c.owner === UNASSIGNED && ageMs(c.createdAt, now) >= FIRST_CONTACT_HOURS * 3_600_000 && ageMs(c.createdAt, now) <= RECENT_DAYS * DAY_MS;
     case "noContact":
       return (
         c.stage === "lead" &&
         c.owner !== UNASSIGNED &&
         ageMs(c.createdAt, now) >= FIRST_CONTACT_HOURS * 3_600_000 &&
+        ageMs(c.createdAt, now) <= RECENT_DAYS * DAY_MS &&
         c.nextStep === "첫 컨택 필요" &&
         !c.activities.some((a) => a.type === "note")
       );

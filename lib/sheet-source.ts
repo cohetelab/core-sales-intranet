@@ -2,7 +2,8 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import { FIELD_COLUMN, FIELD_KEYS, STAGE_SHEET_VALUE, type FieldKey } from "@/lib/lead-fields";
+import { CLOSE_NOTE_TYPE, reasonNote, type CloseReason } from "@/lib/lead-cleanup";
+import { CONSULT_LIMIT, FIELD_COLUMN, FIELD_KEYS, STAGE_SHEET_VALUE, typedNoteLine, type FieldKey } from "@/lib/lead-fields";
 import { parseInquiryRows, recordToCustomer, type LeadRecord, type MissingColumn } from "@/lib/lead-sheet";
 import { UNASSIGNED } from "@/lib/sales-reps";
 import type { Customer, DealStage } from "@/lib/types";
@@ -158,6 +159,82 @@ export const setContract = (ids: string[], user: string) => writeColumn(ids, "�
 
 // 파이프라인에서 카드를 옮길 때: 그 고객의 모든 문의 행의 '단계' 칸을 단계에 맞는 글자로 바꾼다(리드는 비움).
 export const setStage = (ids: string[], stage: DealStage, user: string) => writeColumn(ids, "단계", STAGE_SHEET_VALUE[stage], user);
+
+const CLOSED = "실패/종료";
+
+// 쓰기 업데이트를 묶음(CHUNK)으로 나눠 보내고, 고객별 결과로 모은다. note 업데이트(종료 사유 기록)가 실패해도 종료 자체는 성공으로 둔다.
+async function sendUpdates(updates: (CellUpdate & { owner: string; note?: boolean })[], user: string, results: WriteResult) {
+  for (let i = 0; i < updates.length; i += CHUNK) {
+    const part = updates.slice(i, i + CHUNK);
+    const data = await call({ action: "update", user, updates: part.map((u) => ({ row: u.row, stamp: u.stamp, phone: u.phone, col: u.col, expect: u.expect, value: u.value })) });
+    const list = Array.isArray(data.results) ? (data.results as { index: number; ok: boolean; reason?: string }[]) : [];
+    for (const r of list) {
+      const u = part[r.index];
+      if (u && !r.ok && !u.note && results[u.owner]?.ok) results[u.owner] = { ok: false, reason: r.reason ?? "failed" };
+    }
+  }
+}
+
+// 종료 처리: 그 고객의 모든 문의 행의 '단계' 칸을 '실패/종료'로 바꾼다. 사유를 고르면 가장 최근 행의 상담 내용에
+// "[날짜 시각 이름] (메모) 종료 사유: 무응답" 줄을 이어서 남긴다(시트에 사유 칸이 없어서).
+export async function closeCustomers(ids: string[], reason: CloseReason | null, user: string): Promise<WriteResult> {
+  const snap = await getSnapshot({ fresh: true });
+  const results: WriteResult = {};
+  const updates: (CellUpdate & { owner: string; note?: boolean })[] = [];
+  const line = reason ? typedNoteLine(user, reasonNote(reason), CLOSE_NOTE_TYPE) : "";
+
+  for (const id of ids) {
+    const rec = snap.records.get(id);
+    if (!rec || rec.rowRefs.length === 0) {
+      results[id] = { ok: false, reason: "not_found" };
+      continue;
+    }
+    results[id] = { ok: true };
+    for (const ref of rec.rowRefs) {
+      if (/실패|종료/.test(ref.stage)) continue; // 이미 종료로 표시된 행
+      updates.push({ owner: id, row: ref.row, stamp: ref.stamp, phone: ref.phone, col: "단계", expect: ref.stage, value: CLOSED });
+    }
+    const latest = rec.rowRefs[rec.rowRefs.length - 1];
+    if (reason && latest) {
+      const existing = latest.raw.consult ?? "";
+      const value = `${existing.trim() ? `${existing.trim()}\n` : ""}${line}`;
+      if (value.length <= CONSULT_LIMIT) {
+        updates.push({ owner: id, note: true, row: latest.row, stamp: latest.stamp, phone: latest.phone, col: FIELD_COLUMN.consult, expect: existing, value });
+      }
+    }
+  }
+  try {
+    await sendUpdates(updates, user, results);
+  } finally {
+    invalidateSnapshot();
+  }
+  return results;
+}
+
+// 종료 해제: '실패/종료'로 표시된 행의 '단계' 칸만 비운다(다른 단계가 적힌 행은 건드리지 않는다).
+export async function reopenCustomers(ids: string[], user: string): Promise<WriteResult> {
+  const snap = await getSnapshot({ fresh: true });
+  const results: WriteResult = {};
+  const updates: (CellUpdate & { owner: string })[] = [];
+  for (const id of ids) {
+    const rec = snap.records.get(id);
+    if (!rec || rec.rowRefs.length === 0) {
+      results[id] = { ok: false, reason: "not_found" };
+      continue;
+    }
+    results[id] = { ok: true };
+    for (const ref of rec.rowRefs) {
+      if (!/실패|종료/.test(ref.stage)) continue;
+      updates.push({ owner: id, row: ref.row, stamp: ref.stamp, phone: ref.phone, col: "단계", expect: ref.stage, value: "" });
+    }
+  }
+  try {
+    await sendUpdates(updates, user, results);
+  } finally {
+    invalidateSnapshot();
+  }
+  return results;
+}
 
 export type FieldResult = { ok: boolean; reason?: string };
 
