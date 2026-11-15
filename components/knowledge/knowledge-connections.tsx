@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Maximize2, Minus, Plus, RotateCcw } from "lucide-react";
 import { buildKnowledgeGraph, stableWikiLink, type LinkDocument } from "@/lib/knowledge-links";
 
@@ -16,6 +16,22 @@ export function KnowledgeConnections({ documents, selectedId, onOpen, onInsert }
   const [zoom, setZoom] = useState(1);
   const [target, setTarget] = useState("");
   const [neighborsOnly, setNeighborsOnly] = useState(false);
+  const graphViewport = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const viewport = graphViewport.current;
+    if (!expanded || !viewport) return;
+    const center = () => {
+      const node = viewport.querySelector('g[aria-pressed="true"] circle') || viewport.querySelector("svg");
+      if (!node) return;
+      const targetBox = node.getBoundingClientRect();
+      const box = viewport.getBoundingClientRect();
+      viewport.scrollLeft += targetBox.x + targetBox.width / 2 - box.x - viewport.clientWidth / 2;
+      viewport.scrollTop += targetBox.y + targetBox.height / 2 - box.y - viewport.clientHeight / 2;
+    };
+    const observer = new ResizeObserver(center);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [expanded, zoom, selectedId, filter, neighborsOnly]);
   const byId = new Map(graph.documents.map((doc) => [doc.id, doc]));
   const refs = graph.outgoing.get(selectedId || "") || [];
   const backlinks = graph.backlinks.get(selectedId || "") || [];
@@ -45,7 +61,7 @@ export function KnowledgeConnections({ documents, selectedId, onOpen, onInsert }
     {expanded && <div className="knowledge-graph-section">
       <div className="knowledge-graph-toolbar"><label>문서 찾기<input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="문서 제목 검색" /></label><label className="knowledge-neighbor-filter"><input type="checkbox" checked={neighborsOnly} disabled={!selectedId} onChange={(event) => setNeighborsOnly(event.target.checked)} />선택한 문서 주변만</label><div className="knowledge-zoom"><button className={control} aria-label="그래프 축소" disabled={zoom <= 1} onClick={() => setZoom(Math.max(1, zoom - .5))}><Minus size={15} /></button><button className={control} aria-label="그래프 확대" disabled={zoom >= 3} onClick={() => setZoom(Math.min(3, zoom + .5))}><Plus size={15} /></button><button className={control} aria-label="그래프 배율 초기화" onClick={() => setZoom(1)}><RotateCcw size={15} /></button></div></div>
       <p className="knowledge-graph-summary">문서 {graph.documents.length}개 · 방향별 연결 {graph.edges.length}개 · 현재 표시 {visible.length}개{matching.length > 80 && " · 최대 80개까지 표시합니다. 검색으로 범위를 좁혀 주세요."}</p>
-      {visible.length ? <div className="knowledge-graph-scroll" tabIndex={0} aria-label="문서 연결 지도. 확대하면 가로·세로로 스크롤할 수 있습니다."><svg viewBox="0 0 800 560" style={{ width: `${zoom * 100}%`, minWidth: 640 * zoom }} aria-label="문서를 누르면 해당 문서를 엽니다">
+      {visible.length ? <div ref={graphViewport} className="knowledge-graph-scroll" tabIndex={0} aria-label="문서 연결 지도. 확대하면 가로·세로로 스크롤할 수 있습니다."><svg viewBox="0 0 800 560" style={{ width: `${zoom * 100}%`, minWidth: 640 * zoom }} aria-label="문서를 누르면 해당 문서를 엽니다">
         {graph.edges.map(({ source, target: dest }) => { const a = points.get(source), b = points.get(dest); return a && b ? <line key={`${source}:${dest}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={source === selectedId || dest === selectedId ? "knowledge-edge active" : "knowledge-edge"} /> : null; })}
         {visible.map((doc) => { const point = points.get(doc.id)!; return <g key={doc.id} transform={`translate(${point.x},${point.y})`} role="button" tabIndex={0} aria-label={`문서 열기: ${doc.title}`} aria-pressed={doc.id === selectedId} className={`knowledge-graph-node ${doc.id === selectedId ? "selected" : ""}`} onClick={() => onOpen(doc.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(doc.id); } }}><title>{doc.title}</title><circle r="13" /><text y="30" textAnchor="middle">{doc.title.length > 17 ? `${doc.title.slice(0, 16)}…` : doc.title}</text></g>; })}
       </svg></div> : <p className="knowledge-graph-empty">{graph.documents.length ? "검색 조건에 맞는 문서가 없습니다." : "첫 문서를 만들고 다른 문서를 연결하면 여기에 표시됩니다."}</p>}

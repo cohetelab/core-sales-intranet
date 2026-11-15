@@ -164,7 +164,7 @@ export function KnowledgeWorkspace({ config }: { config: Config }) {
     </div>
   </main>;
 
-  return <main className="mx-auto max-w-[1500px] p-4 md:p-7">
+  return <main className="mx-auto w-full min-w-0 max-w-[1500px] p-4 md:p-7">
     <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
       <div><h1 className="text-2xl font-bold">팀 지식창고</h1><p className="mt-1 text-sm text-neutral-500">팀이 함께 작성하는 문서함 · 자동 저장</p></div>
       <div className="flex items-center gap-3 text-xs text-neutral-500"><span>{data?.email}</span><button className={smallButton} onClick={async () => { await supabase!.auth.signOut(); setLoggedIn(false); }}><LogOut size={15} /> 로그아웃</button></div>

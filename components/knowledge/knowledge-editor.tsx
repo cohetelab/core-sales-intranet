@@ -11,7 +11,7 @@ export const emptyDocument: JSONContent = { type: "doc", content: [{ type: "para
 
 export function KnowledgeEditor({ content, onChange, linkRequest }: { content: JSONContent; onChange: (body: JSONContent, text: string) => void; linkRequest?: { text: string; sequence: number } | null }) {
   const editor = useEditor({
-    extensions: [StarterKit, Link.configure({ openOnClick: false }), TaskList, TaskItem.configure({ nested: true })],
+    extensions: [StarterKit.configure({ link: false }), Link.configure({ openOnClick: false }), TaskList, TaskItem.configure({ nested: true })],
     content,
     immediatelyRender: false,
     editorProps: { attributes: { class: "knowledge-prose min-h-[400px] outline-none" } },
