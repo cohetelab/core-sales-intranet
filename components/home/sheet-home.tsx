@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRightIcon, ChevronRightIcon, CircleIcon, RefreshCw } from "lucide-react";
 
 import { ColumnWarning } from "@/components/column-warning";
+import { MineChip, useMyOnly } from "@/components/my-filter";
 import type { SheetLeads } from "@/components/sheet-leads-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,11 +49,14 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
   const [nowMs] = React.useState(() => Date.now());
   const today = todayKst(nowMs);
 
-  const s = React.useMemo(() => homeSummary(sheet.customers, today), [sheet.customers, today]);
-  const checks = React.useMemo(() => runChecks(sheet.customers, nowMs, today), [sheet.customers, nowMs, today]);
-  const response = React.useMemo(() => responseStats(sheet.customers, nowMs), [sheet.customers, nowMs]);
-  const cleanupN = React.useMemo(() => cleanupCounts(sheet.customers, nowMs)[DEFAULT_CLEANUP_DAYS] ?? 0, [sheet.customers, nowMs]);
-  const months = React.useMemo(() => monthly(inWindow(sheet.customers, nowMs, null)).slice(0, 6).reverse(), [sheet.customers, nowMs]);
+  // '내 리드만'이 켜져 있으면 로그인한 사람의 담당 고객으로만 계산한다(미배정은 제외).
+  const [mine, setMine] = useMyOnly();
+  const customers = React.useMemo(() => (mine && sheet.user ? sheet.customers.filter((c) => c.owner === sheet.user) : sheet.customers), [mine, sheet.user, sheet.customers]);
+  const s = React.useMemo(() => homeSummary(customers, today), [customers, today]);
+  const checks = React.useMemo(() => runChecks(customers, nowMs, today), [customers, nowMs, today]);
+  const response = React.useMemo(() => responseStats(customers, nowMs), [customers, nowMs]);
+  const cleanupN = React.useMemo(() => cleanupCounts(customers, nowMs)[DEFAULT_CLEANUP_DAYS] ?? 0, [customers, nowMs]);
+  const months = React.useMemo(() => monthly(inWindow(customers, nowMs, null)).slice(0, 6).reverse(), [customers, nowMs]);
 
   const todayLabel = new Date(`${today}T12:00:00+09:00`).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "long" });
   const maxStage = Math.max(1, ...STAGE_ORDER.map((st) => s.stageCounts[st]));
@@ -66,7 +70,7 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xl text-muted-foreground">{todayLabel}</p>
-          <h2 className="text-3xl font-semibold tracking-tight">오늘의 업무</h2>
+          <h2 className="text-3xl font-semibold tracking-tight">{mine && sheet.user ? `${sheet.user.replace(/\(.*\)/, "")}님의 오늘 업무` : "오늘의 업무"}</h2>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -74,6 +78,9 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
             구글 시트 연동 · 시트가 원본입니다
             {sheet.fetchedAt && <> · 마지막 확인 {formatDateTime(sheet.fetchedAt)}</>}
           </span>
+          {sheet.user && (
+            <MineChip active={mine} onClick={() => setMine(!mine)} count={sheet.customers.filter((c) => c.owner === sheet.user && c.stage !== "won" && !c.tags.includes("실패/종료")).length} />
+          )}
           <Button variant="outline" className="h-9 py-2" disabled={sheet.refreshing} onClick={() => void sheet.refresh()}>
             <RefreshCw className={`size-3.5 ${sheet.refreshing ? "animate-spin" : ""}`} /> 새로고침
           </Button>

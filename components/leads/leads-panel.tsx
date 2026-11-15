@@ -65,6 +65,7 @@ import {
 } from "@/lib/meta-leads";
 import { OWNER_OPTIONS, SALES_REPS, UNASSIGNED } from "@/lib/sales-reps";
 import { ColumnWarning } from "@/components/column-warning";
+import { MineChip, useMyOnly } from "@/components/my-filter";
 import { useSheetLeads } from "@/components/sheet-leads-provider";
 import type { Customer } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -137,7 +138,7 @@ export function LeadsPanel() {
 
   const [query, setQuery] = React.useState("");
   const [service, setService] = React.useState<ServiceFilter>("all");
-  const [owner, setOwner] = React.useState<OwnerFilter>("all");
+  const [ownerState, setOwner] = React.useState<OwnerFilter>("all");
   const [stage, setStage] = React.useState<StageFilter>("lead");
   const [scheduleOnly, setScheduleOnly] = React.useState(false);
   const [due, setDue] = React.useState<DueFilter>("all");
@@ -145,6 +146,9 @@ export function LeadsPanel() {
   const [cleanup, setCleanup] = React.useState(false);
   const [cleanupDays, setCleanupDays] = React.useState<number>(DEFAULT_CLEANUP_DAYS);
   const [closeReason, setCloseReason] = React.useState("none");
+  const [mine, setMine] = useMyOnly();
+  // '내 리드만'이 켜져 있으면 로그인한 사람의 담당으로 본다(다른 담당 칩을 누르면 꺼진다).
+  const owner: OwnerFilter = mine && sheetMode && sheet.user ? sheet.user : ownerState;
   const [nowMs] = React.useState(() => Date.now());
   const [page, setPage] = React.useState(0);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -689,8 +693,20 @@ export function LeadsPanel() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="담당 필터">
+              {sheetMode && sheet.user && (
+                <MineChip
+                  active={owner === sheet.user}
+                  count={ownerCounts.get(sheet.user) ?? 0}
+                  onClick={() => {
+                    const on = owner !== sheet.user;
+                    setMine(on);
+                    setOwner(on ? (sheet.user as string) : "all");
+                    resetPage();
+                  }}
+                />
+              )}
               {(["all", ...OWNER_OPTIONS, ...((ownerCounts.get(FORMER) ?? 0) > 0 || owner === FORMER ? [FORMER] : [])] as OwnerFilter[]).map((f) => (
-                <Chip key={f} active={owner === f} onClick={() => { setOwner(f); resetPage(); }}>
+                <Chip key={f} active={owner === f} onClick={() => { setMine(f === sheet.user); setOwner(f); resetPage(); }}>
                   {f === "all" ? "전체 담당" : f === FORMER ? "이전 담당(퇴사자)" : f}
                   <span className="tabular-nums opacity-70">{(ownerCounts.get(f) ?? 0).toLocaleString("ko-KR")}</span>
                 </Chip>

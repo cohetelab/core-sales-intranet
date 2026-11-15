@@ -5,6 +5,7 @@ import { GripVerticalIcon, RefreshCw, SearchIcon } from "lucide-react";
 
 import { LeadDetailSheet } from "@/components/leads/lead-detail-sheet";
 import { ColumnWarning } from "@/components/column-warning";
+import { MineChip, useMyOnly } from "@/components/my-filter";
 import type { SheetLeads } from "@/components/sheet-leads-provider";
 import { StatGrid, type Stat } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
@@ -208,10 +209,14 @@ function Column({
 
 export function SheetPipeline({ sheet }: { sheet: SheetLeads }) {
   const [query, setQuery] = React.useState("");
-  const [owner, setOwner] = React.useState("all");
+  const [ownerState, setOwner] = React.useState("all");
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [draggingId, setDraggingId] = React.useState<string | null>(null);
   const [blockNote, setBlockNote] = React.useState<string | null>(null);
+  const [mine, setMine] = useMyOnly();
+  // '내 리드만'이 켜져 있으면 로그인한 사람의 담당으로 본다(다른 담당 칩을 누르면 꺼진다).
+  const owner = mine && sheet.user ? sheet.user : ownerState;
+
   const [limits, setLimits] = React.useState<Record<DealStage, number>>({ lead: PAGE, discovery: PAGE, proposal: PAGE, won: PAGE });
 
   // 실패/종료 고객은 파이프라인에서 숨긴다(리드 인박스에서 태그로 볼 수 있다).
@@ -322,8 +327,19 @@ export function SheetPipeline({ sheet }: { sheet: SheetLeads }) {
           />
         </div>
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="담당 필터">
+          {sheet.user && (
+            <MineChip
+              active={owner === sheet.user}
+              count={ownerCount(sheet.user)}
+              onClick={() => {
+                const on = owner !== sheet.user;
+                setMine(on);
+                setOwner(on ? (sheet.user as string) : "all");
+              }}
+            />
+          )}
           {(["all", ...OWNER_OPTIONS] as string[]).map((o) => (
-            <Chip key={o} active={owner === o} onClick={() => setOwner(o)}>
+            <Chip key={o} active={owner === o} onClick={() => { setMine(o === sheet.user); setOwner(o); }}>
               {o === "all" ? "전체 담당" : o}
               <span className="tabular-nums opacity-70">{ownerCount(o).toLocaleString("ko-KR")}</span>
             </Chip>
