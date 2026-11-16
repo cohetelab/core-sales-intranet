@@ -11,6 +11,7 @@ import { AgentDockPanel, AgentDockProvider } from "@/components/agent-dock";
 import { SampleDataNotice } from "@/components/sample-data-notice";
 import { SheetLeadsProvider } from "@/components/sheet-leads-provider";
 import { ViewModeGate, ViewModeProvider } from "@/components/view-mode";
+import { WorkspaceConfigProvider } from "@/components/workspace-config";
 import { CustomerStoreProvider } from "@/lib/customer-store";
 import { InfluencerStoreProvider } from "@/lib/influencer-store";
 import { InfluencerGroupStoreProvider } from "@/lib/influencer-group-store";
@@ -27,6 +28,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <ViewModeProvider>
             <ViewModeGate>
             <AgentDockProvider>
+            <WorkspaceConfigProvider>
             <SidebarProvider
               style={
                 {
@@ -53,6 +55,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
               </SidebarInset>
               <AgentDockPanel />
             </SidebarProvider>
+            </WorkspaceConfigProvider>
             </AgentDockProvider>
             </ViewModeGate>
             </ViewModeProvider>

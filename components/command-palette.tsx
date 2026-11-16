@@ -11,7 +11,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { NAV_CATEGORIES } from "@/components/nav-config";
+import { useVisibleCategories } from "@/components/workspace-config";
 import { useCustomerStore } from "@/lib/customer-store";
 import { useInfluencerStore } from "@/lib/influencer-store";
 
@@ -29,6 +29,7 @@ const MAX_PER_GROUP = 6;
 // ⌘K / Ctrl+K — 메뉴, 고객사, 크리에이터를 한 번에 찾는 통합 검색.
 export function CommandPaletteTrigger() {
   const router = useRouter();
+  const categories = useVisibleCategories(); // 화면 설정에서 숨긴 메뉴는 검색에서도 뺀다
   const { customers } = useCustomerStore();
   const { influencers } = useInfluencerStore();
   const [open, setOpen] = React.useState(false);
@@ -59,7 +60,7 @@ export function CommandPaletteTrigger() {
       close();
     };
 
-    const menus: Result[] = NAV_CATEGORIES.flatMap((c) =>
+    const menus: Result[] = categories.flatMap((c) =>
       c.items.map((item) => ({
         key: `menu-${item.url}`,
         group: "메뉴",
@@ -98,7 +99,7 @@ export function CommandPaletteTrigger() {
 
     // 검색어가 없으면 메뉴만 보여 준다.
     return q ? [...filter(menus), ...filter(companies), ...filter(creators)] : filter(menus);
-  }, [query, customers, influencers, router, close]);
+  }, [query, customers, influencers, router, close, categories]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {

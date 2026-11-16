@@ -2,12 +2,13 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowRightIcon, ChevronRightIcon, CircleIcon, RefreshCw } from "lucide-react";
+import { ArrowRightIcon, ChevronRightIcon, CircleIcon, RefreshCw, SlidersHorizontalIcon } from "lucide-react";
 
 import { ColumnWarning } from "@/components/column-warning";
 import { DigestCard } from "@/components/home/digest-card";
 import { MineChip, useMyOnly } from "@/components/my-filter";
 import type { SheetLeads } from "@/components/sheet-leads-provider";
+import { useWorkspaceConfig } from "@/components/workspace-config";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { IRM_LIMIT, useCreatorIrm } from "@/lib/creator-irm-store";
@@ -20,10 +21,19 @@ import { formatDuration, responseStats } from "@/lib/lead-response";
 import { inWindow, monthly } from "@/lib/lead-report";
 import { STAGE_LABEL, STAGE_ORDER } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
+import { visibleWidgets, type WidgetId, type WidgetWidth } from "@/lib/workspace-config";
 
 // 구글 시트가 원본인 홈. 샘플 데이터(MRR·가짜 일정) 대신 시트의 실제 고객으로 오늘 할 일과 현황을 보여 준다.
 
 const n = (v: number) => v.toLocaleString("ko-KR");
+
+// 12칸 격자에서 카드가 차지하는 폭(좁은 화면에서는 반/전체). Tailwind가 알아볼 수 있게 클래스 이름을 그대로 적는다.
+const WIDTH_CLASS: Record<WidgetWidth, string> = {
+  4: "md:col-span-6 lg:col-span-4",
+  6: "md:col-span-6 lg:col-span-6",
+  8: "lg:col-span-8",
+  12: "lg:col-span-12",
+};
 
 function SectionTitle({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
@@ -47,6 +57,7 @@ function SeeAll({ href, label = "전체 보기" }: { href: string; label?: strin
 
 export function SheetHome({ sheet }: { sheet: SheetLeads }) {
   const irm = useCreatorIrm();
+  const { config, openSettings } = useWorkspaceConfig();
   const [nowMs] = React.useState(() => Date.now());
   const today = todayKst(nowMs);
 
@@ -66,51 +77,8 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
   const dueRatio = s.withDue ? Math.round((s.due3 / s.withDue) * 100) : 0;
   const checkTotal = Object.values(checks).reduce((a, b) => a + b, 0);
 
-  return (
-    <>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xl text-muted-foreground">{todayLabel}</p>
-          <h2 className="text-3xl font-semibold tracking-tight">{mine && sheet.user ? `${sheet.user.replace(/\(.*\)/, "")}님의 오늘 업무` : "오늘의 업무"}</h2>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-            <span className="size-1.5 rounded-full bg-emerald-500" />
-            구글 시트 연동 · 시트가 원본입니다
-            {sheet.fetchedAt && <> · 마지막 확인 {formatDateTime(sheet.fetchedAt)}</>}
-          </span>
-          {sheet.user && (
-            <MineChip active={mine} onClick={() => setMine(!mine)} count={sheet.customers.filter((c) => c.owner === sheet.user && c.stage !== "won" && !c.tags.includes("실패/종료")).length} />
-          )}
-          <Button variant="outline" className="h-9 py-2" disabled={sheet.refreshing} onClick={() => void sheet.refresh()}>
-            <RefreshCw className={`size-3.5 ${sheet.refreshing ? "animate-spin" : ""}`} /> 새로고침
-          </Button>
-          <Button asChild className="h-9 py-2">
-            <Link href="/leads">
-              리드 인박스 <ArrowRightIcon className="size-3.5" />
-            </Link>
-          </Button>
-        </div>
-      </div>
-
-      {sheet.notice && (
-        <div
-          role="alert"
-          className={cn(
-            "flex items-start justify-between gap-3 rounded-2xl px-3 py-2 text-xs",
-            sheet.notice.kind === "error" ? "bg-destructive/10 text-destructive" : "bg-muted text-foreground"
-          )}
-        >
-          <span>{sheet.notice.text}</span>
-          <button type="button" onClick={sheet.dismissNotice} className="shrink-0 underline">
-            닫기
-          </button>
-        </div>
-      )}
-
-      <ColumnWarning missing={sheet.missing} />
-
-      {cleanupN > 0 && (
+  const nodes: Record<WidgetId, React.ReactNode> = {
+    cleanup: cleanupN > 0 ? (
         <div role="note" aria-label="정리 대기" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-muted px-4 py-3 text-sm">
           <p>
             <strong className="font-semibold tabular-nums">정리 대기 {n(cleanupN)}건</strong>
@@ -122,9 +90,8 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
             </Link>
           </Button>
         </div>
-      )}
-
-      <div className="grid gap-4 lg:grid-cols-[1fr_1.6fr_1fr]">
+      ) : null,
+    status: (
         <Card className="shadow-xs">
           <CardContent className="flex h-full flex-col gap-5">
             <SectionTitle>영업 현황</SectionTitle>
@@ -151,7 +118,8 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
             </div>
           </CardContent>
         </Card>
-
+    ),
+    pipeline: (
         <Card className="shadow-xs">
           <CardContent className="flex h-full flex-col gap-4">
             <SectionTitle action={<SeeAll href="/pipeline" />}>파이프라인 분석</SectionTitle>
@@ -179,7 +147,8 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
             </div>
           </CardContent>
         </Card>
-
+    ),
+    schedule: (
         <Card className="shadow-xs">
           <CardContent className="flex h-full flex-col gap-3">
             <div className="flex items-center justify-between">
@@ -208,9 +177,8 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_1.3fr_1fr]">
+    ),
+    checks: (
         <Card className="shadow-xs">
           <CardContent className="flex flex-col gap-3">
             <SectionTitle action={<SeeAll href="/leads" label="리드 인박스" />}>오늘의 점검</SectionTitle>
@@ -233,7 +201,8 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
             </ul>
           </CardContent>
         </Card>
-
+    ),
+    response: (
         <Card className="shadow-xs">
           <CardContent className="flex flex-col gap-3">
             <SectionTitle action={<SeeAll href="/leads" label="리드 인박스" />}>응답 속도 · 최근 30일</SectionTitle>
@@ -266,8 +235,8 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
             <p className="text-xs text-muted-foreground">인트라넷에서 남긴 기록만 집계됩니다.</p>
           </CardContent>
         </Card>
-
-        <div className="grid gap-4">
+    ),
+    deadline: (
           <Card className="shadow-xs">
             <CardContent className="space-y-2">
               <SectionTitle action={<SeeAll href="/leads" label="" />}>마감 임박</SectionTitle>
@@ -283,26 +252,8 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
               </p>
             </CardContent>
           </Card>
-
-          <Card className="shadow-xs">
-            <CardContent className="space-y-2">
-              <SectionTitle action={<SeeAll href="/creator-irm" label="" />}>크리에이터 커뮤니티</SectionTitle>
-              <p className="text-3xl font-semibold tabular-nums">
-                {irmCount}
-                <span className="ml-1 text-base text-muted-foreground">명</span>
-              </p>
-              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (irmCount / IRM_LIMIT) * 100)}%` }} />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                컨택 중 {irmCount} / {IRM_LIMIT}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
+    ),
+    months: (
         <Card className="shadow-xs">
           <CardContent className="flex flex-col gap-3">
             <SectionTitle action={<SeeAll href="/reports" label="리포트" />}>월별 문의 (최근 6개월)</SectionTitle>
@@ -325,7 +276,8 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
             )}
           </CardContent>
         </Card>
-
+    ),
+    activity: (
         <Card className="shadow-xs">
           <CardContent className="flex flex-col gap-3">
             <SectionTitle action={<SeeAll href="/leads" label="리드 인박스" />}>최근 활동</SectionTitle>
@@ -347,9 +299,86 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
             )}
           </CardContent>
         </Card>
+    ),
+    community: (
+          <Card className="shadow-xs">
+            <CardContent className="space-y-2">
+              <SectionTitle action={<SeeAll href="/creator-irm" label="" />}>크리에이터 커뮤니티</SectionTitle>
+              <p className="text-3xl font-semibold tabular-nums">
+                {irmCount}
+                <span className="ml-1 text-base text-muted-foreground">명</span>
+              </p>
+              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (irmCount / IRM_LIMIT) * 100)}%` }} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                컨택 중 {irmCount} / {IRM_LIMIT}
+              </p>
+            </CardContent>
+          </Card>
+    ),
+    slack: <DigestCard />,
+  };
+
+  return (
+    <>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xl text-muted-foreground">{todayLabel}</p>
+          <h2 className="text-3xl font-semibold tracking-tight">{mine && sheet.user ? `${sheet.user.replace(/\(.*\)/, "")}님의 오늘 업무` : "오늘의 업무"}</h2>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span className="size-1.5 rounded-full bg-emerald-500" />
+            구글 시트 연동 · 시트가 원본입니다
+            {sheet.fetchedAt && <> · 마지막 확인 {formatDateTime(sheet.fetchedAt)}</>}
+          </span>
+          {sheet.user && (
+            <MineChip active={mine} onClick={() => setMine(!mine)} count={sheet.customers.filter((c) => c.owner === sheet.user && c.stage !== "won" && !c.tags.includes("실패/종료")).length} />
+          )}
+          <Button variant="outline" className="h-9 py-2" onClick={() => openSettings("home")}>
+            <SlidersHorizontalIcon className="size-3.5" /> 화면 편집
+          </Button>
+          <Button variant="outline" className="h-9 py-2" disabled={sheet.refreshing} onClick={() => void sheet.refresh()}>
+            <RefreshCw className={`size-3.5 ${sheet.refreshing ? "animate-spin" : ""}`} /> 새로고침
+          </Button>
+          <Button asChild className="h-9 py-2">
+            <Link href="/leads">
+              리드 인박스 <ArrowRightIcon className="size-3.5" />
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      <DigestCard />
+      {sheet.notice && (
+        <div
+          role="alert"
+          className={cn(
+            "flex items-start justify-between gap-3 rounded-2xl px-3 py-2 text-xs",
+            sheet.notice.kind === "error" ? "bg-destructive/10 text-destructive" : "bg-muted text-foreground"
+          )}
+        >
+          <span>{sheet.notice.text}</span>
+          <button type="button" onClick={sheet.dismissNotice} className="shrink-0 underline">
+            닫기
+          </button>
+        </div>
+      )}
+
+      <ColumnWarning missing={sheet.missing} />
+
+      {/* 홈 카드: 화면 설정에서 정한 순서·너비·표시대로 그린다 */}
+      <div className="grid grid-cols-12 gap-4" aria-label="홈 카드">
+        {visibleWidgets(config).map((w) => {
+          const node = nodes[w.id];
+          if (!node) return null;
+          return (
+            <div key={w.id} data-widget={w.id} className={cn("col-span-12 [&>[data-slot=card]]:h-full", WIDTH_CLASS[w.width])}>
+              {node}
+            </div>
+          );
+        })}
+      </div>
     </>
   );
 }

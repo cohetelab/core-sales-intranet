@@ -22,10 +22,10 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import {
-  NAV_CATEGORIES,
   categoryOfPath,
   type NavItem,
 } from "@/components/nav-config";
+import { useVisibleCategories } from "@/components/workspace-config";
 import { cn } from "@/lib/utils";
 
 const navSecondary = [
@@ -69,15 +69,18 @@ function TwoLevelNav() {
   const router = useRouter();
   const [picked, setPicked] = React.useState<{ path: string; id: string } | null>(null);
   const [query, setQuery] = React.useState("");
+  // 화면 설정에서 숨긴 메뉴는 빼고, 정한 순서를 적용한다(메뉴가 하나도 안 남은 대분류는 레일에서도 빠진다).
+  const categories = useVisibleCategories();
 
   // 레일에서 직접 고른 대분류는 같은 경로에 머무는 동안만 유지하고,
   // 페이지가 바뀌면 현재 경로가 속한 대분류로 되돌아간다.
   const activeId = picked?.path === pathname ? picked.id : categoryOfPath(pathname);
-  const active = NAV_CATEGORIES.find((c) => c.id === activeId) ?? NAV_CATEGORIES[0];
+  // 지금 보는 화면이 숨긴 메뉴여도(주소로 연 경우) 그 대분류가 사라졌다면 첫 대분류를 보여 준다.
+  const active = categories.find((c) => c.id === activeId) ?? categories[0];
 
   const q = query.trim().toLowerCase();
   const matches = q
-    ? NAV_CATEGORIES.flatMap((c) =>
+    ? categories.flatMap((c) =>
         c.items.filter((i) => i.title.toLowerCase().includes(q)).map((i) => ({ cat: c, item: i }))
       )
     : [];
@@ -98,7 +101,7 @@ function TwoLevelNav() {
         aria-label="대분류"
         className="no-scrollbar flex w-16 shrink-0 flex-col items-center gap-1 overflow-y-auto py-1"
       >
-        {NAV_CATEGORIES.map((c) => {
+        {categories.map((c) => {
           const on = c.id === active.id && !q;
           return (
             <button
