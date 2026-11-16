@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRightIcon, ChevronRightIcon, CircleIcon, RefreshCw } from "lucide-react";
 
 import { ColumnWarning } from "@/components/column-warning";
+import { DigestCard } from "@/components/home/digest-card";
 import { MineChip, useMyOnly } from "@/components/my-filter";
 import type { SheetLeads } from "@/components/sheet-leads-provider";
 import { Button } from "@/components/ui/button";
@@ -347,6 +348,8 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
           </CardContent>
         </Card>
       </div>
+
+      <DigestCard />
     </>
   );
 }
