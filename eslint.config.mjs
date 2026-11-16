@@ -12,6 +12,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "tests/**",
     "services/baalda/upstream/**",
     "services/baalda/local/**",
     "services/baalda/backups/**",

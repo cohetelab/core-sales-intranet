@@ -47,3 +47,6 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# 테스트 스크린샷
+/tests/out/
