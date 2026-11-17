@@ -10,6 +10,9 @@ export type HomeWidget = { id: WidgetId; width: WidgetWidth; hidden: boolean };
 export type MenuConfig = { hidden: string[]; order: Record<string, string[]> };
 export type WorkspaceConfig = { version: 1; menus: MenuConfig; home: HomeWidget[] };
 
+// 팀 공용 저장소에 들어가는 문서(서버가 version을 올리며 저장한다)
+export type TeamDoc = { version: number; updatedAt: string; updatedBy: string; config: WorkspaceConfig };
+
 export const STORAGE_KEY = "core-sales-workspace-config-v1";
 export const WIDTHS: readonly WidgetWidth[] = [4, 6, 8, 12];
 export const WIDTH_LABEL: Record<WidgetWidth, string> = { 4: "1/3", 6: "1/2", 8: "2/3", 12: "전체" };

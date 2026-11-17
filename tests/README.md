@@ -9,7 +9,7 @@ npm test                 # 단위 + 브라우저 전체(약 5분)
 node tests/run-all.cjs --only mine   # 이름에 'mine'이 들어간 테스트만
 ```
 브라우저 테스트는 실행기가 알아서 가짜 시트 서버(4020), 필요하면 가짜 Slack(4030), 개발 서버(3010)를 띄우고 끕니다.
-**실행 전에 3010·4020·4030 포트를 쓰는 프로세스가 없어야 합니다.**
+**실행 전에 3010·4020·4030·4040 포트를 쓰는 프로세스가 없어야 합니다.**
 
 ## 준비물
 - Node.js, 그리고 Playwright. 이 저장소에는 playwright가 설치돼 있지 않아서 아래 순서로 찾습니다.
@@ -25,7 +25,9 @@ node tests/run-all.cjs --only mine   # 이름에 'mine'이 들어간 테스트�
 | `tests/unit/*-test.cjs` | `lib/*.ts`의 계산 규칙(점검, 정리 대기, 종료 사유, 응답 속도, 리포트, 알림 글, 화면 설정, 시트 읽기 등) |
 | `tests/browser/*-ui.cjs` | 가짜 시트로 실제 화면을 조작(로그인, 담당 배정, 상담 기록, 파이프라인, 정리 대기함, 리포트, 홈, 화면 설정, Slack 알림 등) |
 | `tests/browser/local-*.cjs` | 시트 설정이 없을 때의 샘플 화면 확인 |
-| `tests/support/` | 실행기가 쓰는 도구: lib 변환기, Playwright 불러오기, 가짜 시트 서버, 가짜 Slack 서버 |
+| `tests/support/` | 실행기가 쓰는 도구: lib 변환기, Playwright 불러오기, 가짜 시트 서버, 가짜 Slack 서버, 가짜 Supabase Storage 서버 |
+
+팀 공용 화면 설정(`workspace-team-ui`)은 두 번 돌립니다: 파일 저장소로 한 번, 가짜 Supabase Storage 서버로 한 번(실제 `supabase-js` 클라이언트가 버킷 생성·업로드·다운로드를 올바르게 호출하는지 확인). 가짜 서버의 오류 모양은 문서에 없어 추정한 것이라, 진짜 Supabase에서의 동작은 보장하지 않습니다.
 
 가짜 시트 서버는 `integrations/sheet-bridge/Code.gs`(진짜 Apps Script)를 그대로 실행하는 시험 도구(`integrations/sheet-bridge/test/gas-harness.cjs`)를 씁니다. 그래서 충돌 검사, 칸 허용 목록, 기록 탭 같은 Apps Script 쪽 규칙도 함께 검증됩니다.
 

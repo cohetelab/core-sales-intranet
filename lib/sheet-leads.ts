@@ -188,6 +188,7 @@ export function useSheetLeadsState(active: boolean) {
           setUser(name);
           setStatus("loading");
           await load("now");
+          window.dispatchEvent(new Event("core-sales-login")); // 팀 공용 화면 설정 등을 로그인 직후 바로 불러오게 알린다
           return null;
         }
         const data = (await res.json().catch(() => ({}))) as { error?: string };

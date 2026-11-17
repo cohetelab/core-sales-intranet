@@ -96,17 +96,18 @@ const ok = (name, cond, extra = "") => { console.log(`${cond ? "✓" : "✗"} ${
   await p.waitForSelector("[data-widget]");
   ok("홈 카드도 기본 11개·기본 순서로 복귀", (await order()).join() === def.join());
 
-  // 7) 브라우저마다 따로(새 브라우저는 기본값)
+  // 7) 팀 공용: 한 사람이 바꾸면 다른 사람이 로그인했을 때도 같은 구성(서버에 저장). 자세한 시나리오는 workspace-team-ui.cjs
   await p.getByRole("button", { name: "화면 편집" }).click(); await dialog().waitFor();
   await dialog().getByRole("checkbox", { name: "최근 활동 표시" }).click();
   await p.keyboard.press("Escape");
+  await p.waitForTimeout(1500); // 팀 저장소에 저장될 시간
   const ctx2 = await b.newContext({ viewport: { width: 1600, height: 1400 } });
   const p2 = await ctx2.newPage();
   await p2.goto(`${BASE}/`, { waitUntil: "networkidle" });
   await p2.getByRole("combobox", { name: "내 이름" }).click(); await p2.getByRole("option", { name: "이익재(Ian)" }).click();
   await p2.getByLabel("리드 화면 비밀번호").fill("lead-pass"); await p2.getByRole("button", { name: "들어가기" }).click();
   await p2.waitForSelector("[data-widget]");
-  ok("다른 브라우저(다른 사람)는 내 설정과 무관하게 기본값", (await p2.locator("[data-widget]").evaluateAll((els) => els.map((e) => e.getAttribute("data-widget")))).includes("activity"));
+  ok("다른 사람(다른 브라우저)도 로그인하면 같은 구성(최근 활동이 꺼진 팀 설정)", await (async () => { const t0 = Date.now(); while (Date.now() - t0 < 12000) { if (!(await p2.locator("[data-widget]").evaluateAll((els) => els.map((e) => e.getAttribute("data-widget")))).includes("activity")) return true; await p2.waitForTimeout(250); } return false; })());
 
   ok("페이지 에러 없음", errs.length === 0, errs.join(" | "));
   await p.getByRole("button", { name: "화면 편집" }).click(); await dialog().waitFor();

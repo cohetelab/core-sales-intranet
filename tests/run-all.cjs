@@ -14,8 +14,10 @@ const path = require("path");
 
 const ROOT = path.join(__dirname, "..");
 const T = (...p) => path.join(__dirname, ...p);
-const PORT = { app: 3010, sheet: 4020, slack: 4030 };
+const PORT = { app: 3010, sheet: 4020, slack: 4030, supa: 4040 };
 const APP = `http://localhost:${PORT.app}`;
+// 팀 공용 화면 설정은 테스트에서 파일에 저장한다(운영은 Supabase Storage). 테스트마다 비운다.
+const CONFIG_FILE = T("out", "workspace-config.json");
 
 const args = process.argv.slice(2);
 const flag = (f) => args.includes(f);
@@ -48,12 +50,20 @@ async function waitFor(fn, ms) { const t0 = Date.now(); while (Date.now() - t0 <
 // ── 가짜 서버 ──
 let sheetProc = null;
 async function resetSheet() {
+  fs.rmSync(CONFIG_FILE, { force: true, recursive: true });
   kill(sheetProc);
   await waitFor(async () => !(await portBusy(PORT.sheet)), 8000);
   sheetProc = start(T("support/fake-sheet-server.cjs"));
   if (!(await waitFor(() => fetch(`http://127.0.0.1:${PORT.sheet}/admin/dump`, { method: "POST", body: "{}" }).then((r) => r.ok), 15000))) throw new Error("가짜 시트 서버가 뜨지 않았습니다");
 }
 let slackProc = null;
+let supaProc = null;
+async function resetSupabase() {
+  kill(supaProc);
+  await waitFor(async () => !(await portBusy(PORT.supa)), 8000);
+  supaProc = start(T("support/fake-supabase.cjs"));
+  if (!(await waitFor(() => fetch(`http://127.0.0.1:${PORT.supa}/_log`).then((r) => r.ok), 15000))) throw new Error("가짜 Supabase 서버가 뜨지 않았습니다");
+}
 async function startSlack() {
   kill(slackProc);
   await waitFor(async () => !(await portBusy(PORT.slack)), 8000);
@@ -84,7 +94,7 @@ function run(group, file, fileArgs = []) {
   if (!ok) {
     const out = `${r.stdout || ""}${r.stderr || ""}`.split("\n").filter(Boolean);
     const bad = out.filter((l) => /✗|FAIL|Error|ECONN|Timeout/.test(l));
-    console.log("    " + (bad.length ? bad.slice(0, 8) : out.slice(-8)).join("\n    "));
+    console.log("    " + (flag("--verbose") ? out.slice(-40) : bad.length ? bad.slice(0, 8) : out.slice(-8)).join("\n    "));
   }
 }
 
@@ -99,17 +109,18 @@ const list = (dir, suffix) => fs.readdirSync(T(dir)).filter((f) => f.endsWith(su
   if (wantE2e) {
     for (const p of Object.values(PORT)) if (await portBusy(p)) { console.error(`포트 ${p}를 이미 쓰는 프로세스가 있습니다. 끄고 다시 실행해 주세요.`); process.exit(2); }
 
-    const sheetEnv = { SHEET_SCRIPT_URL: `http://127.0.0.1:${PORT.sheet}/exec`, SHEET_SCRIPT_TOKEN: "secret-token", LEADS_PASSCODE: "lead-pass" };
+    const sheetEnv = { SHEET_SCRIPT_URL: `http://127.0.0.1:${PORT.sheet}/exec`, SHEET_SCRIPT_TOKEN: "secret-token", LEADS_PASSCODE: "lead-pass", WORKSPACE_CONFIG_FILE: CONFIG_FILE };
     const slackEnv = { ...sheetEnv, CRON_SECRET: "test-cron-secret-1234567890" };
     const warm = ["/api/leads/session", "/api/leads/digest", "/api/cron/digest", "/", "/leads", "/pipeline", "/reports"];
-    const sheetSuites = ["workspace", "home", "mine", "closed", "cleanup", "former", "record", "history", "response", "pipeline", "reports", "checks", "missing", "kanban"].map((n) => T("browser", `${n}-ui.cjs`));
+    const sheetSuites = ["workspace", "workspace-team", "home", "mine", "closed", "cleanup", "former", "record", "history", "response", "pipeline", "reports", "checks", "missing", "kanban"].map((n) => T("browser", `${n}-ui.cjs`));
 
     const groups = [
       { title: "시트 연동 화면", env: sheetEnv, items: sheetSuites.map((f) => [f]), sheet: true },
       { title: "Slack 알림 — 연결됨", env: { ...slackEnv, SLACK_WEBHOOK_URL: `http://127.0.0.1:${PORT.slack}/services/T000/B000/XXXX` }, items: [[T("browser/digest-ui.cjs"), "configured"]], sheet: true, slack: true },
       { title: "Slack 알림 — 연결 안 됨", env: slackEnv, items: [[T("browser/digest-ui.cjs"), "unconfigured"]], sheet: true, slack: true },
       { title: "Slack 알림 — 허용되지 않는 주소", env: { ...slackEnv, SLACK_WEBHOOK_URL: "https://evil.example.com/hook" }, items: [[T("browser/digest-ui.cjs"), "evil"]], sheet: true, slack: true },
-      { title: "시트 설정이 없는 화면(샘플 화면)", env: {}, items: [[T("browser/local-home.cjs")], [T("browser/local-reports.cjs")], [T("browser/kanban-ui.cjs"), "local"]], sheet: false },
+      { title: "팀 공용 설정 — Supabase Storage(가짜 서버)", env: { ...sheetEnv, WORKSPACE_CONFIG_FILE: "", SUPABASE_URL: `http://127.0.0.1:${PORT.supa}`, SUPABASE_SECRET_KEY: "fake-secret-key" }, items: [[T("browser/workspace-team-ui.cjs")]], sheet: true, supabase: true },
+      { title: "시트 설정이 없는 화면(샘플 화면)", env: {}, items: [[T("browser/local-home.cjs")], [T("browser/local-reports.cjs")], [T("browser/local-workspace.cjs")], [T("browser/kanban-ui.cjs"), "local"]], sheet: false },
     ];
 
     for (const g of groups) {
@@ -120,6 +131,7 @@ const list = (dir, suffix) => fs.readdirSync(T(dir)).filter((f) => f.endsWith(su
       if (g.slack) await startSlack();
       for (const [file, ...fileArgs] of items) {
         if (g.sheet) await resetSheet();
+        if (g.supabase) await resetSupabase();
         run(g.title, file, fileArgs);
       }
     }
