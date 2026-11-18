@@ -8,7 +8,8 @@ export type WidgetWidth = 4 | 6 | 8 | 12; // 12칸 격자: 1/3 · 1/2 · 2/3 · 
 
 export type HomeWidget = { id: WidgetId; width: WidgetWidth; hidden: boolean };
 export type MenuConfig = { hidden: string[]; order: Record<string, string[]> };
-export type WorkspaceConfig = { version: 1; menus: MenuConfig; home: HomeWidget[] };
+// leadsSince: 이 날짜(YYYY-MM-DD) 이전에 들어와서 그 뒤로 활동도 없는 고객은 화면에서 숨긴다(시트는 그대로). null이면 전부 보인다.
+export type WorkspaceConfig = { version: 1; menus: MenuConfig; home: HomeWidget[]; leadsSince: string | null };
 
 // 팀 공용 저장소에 들어가는 문서(서버가 version을 올리며 저장한다)
 export type TeamDoc = { version: number; updatedAt: string; updatedBy: string; config: WorkspaceConfig };
@@ -41,7 +42,11 @@ export const defaultConfig = (): WorkspaceConfig => ({
   version: 1,
   menus: { hidden: [...SAMPLE_MENU_URLS], order: {} },
   home: WIDGETS.map((w) => ({ id: w.id, width: w.width, hidden: false })),
+  leadsSince: null,
 });
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+export const validSince = (v: unknown): v is string => typeof v === "string" && DATE_RE.test(v) && !Number.isNaN(Date.parse(v));
 
 const isStrArray = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string");
 
@@ -72,7 +77,7 @@ export function normalizeConfig(raw: unknown): WorkspaceConfig {
     for (const d of base.home) if (!seen.has(d.id)) kept.push(d);
     home = kept;
   }
-  return { version: 1, menus: { hidden, order }, home };
+  return { version: 1, menus: { hidden, order }, home, leadsSince: validSince(r.leadsSince) ? r.leadsSince : null };
 }
 
 type Storage = Pick<globalThis.Storage, "getItem" | "setItem" | "removeItem">;
@@ -148,5 +153,11 @@ export function visibleCategories<C extends { id: string; items: readonly { url:
     .map((cat) => ({ ...cat, items: applyOrder(cat.items, c.menus.order[cat.id]).filter((i) => !isMenuHidden(c, i.url)) }))
     .filter((cat) => cat.items.length > 0);
 }
+
+export const setLeadsSince = (c: WorkspaceConfig, since: string | null): WorkspaceConfig => ({ ...c, leadsSince: since && validSince(since) ? since : null });
+
+// 기준일 이전에 들어왔고 그 뒤 활동도 없는 고객은 숨긴다. 옛 고객이 다시 문의하거나 기록이 쌓이면 다시 보인다.
+export const isBeforeSince = (c: { createdAt: string; lastActivityAt: string }, since: string | null) =>
+  !!since && c.createdAt.slice(0, 10) < since && c.lastActivityAt.slice(0, 10) < since;
 
 export const visibleWidgets = (c: WorkspaceConfig) => c.home.filter((w) => !w.hidden);

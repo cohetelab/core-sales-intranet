@@ -61,5 +61,16 @@ ok("새로 생긴 메뉴는 저장된 순서 뒤에 붙음", w.visibleCategories
 ok("원본 카테고리 목록은 바뀌지 않음", cats[1].items.map((i) => i.url).join() === "/pipeline,/leads,/customers,/team");
 ok("applyOrder: 목록이 비어 있으면 원래 순서", w.applyOrder(cats[1].items, undefined).map((i) => i.url).join() === "/pipeline,/leads,/customers,/team");
 
+// 기준일(leadsSince): 시트는 그대로 두고 화면에서만 옛 고객을 숨긴다
+ok("기본: 기준일 없음(전부 보임)", d.leadsSince === null);
+ok("기준일 설정·해제", w.setLeadsSince(d, "2026-11-02").leadsSince === "2026-11-02" && w.setLeadsSince(w.setLeadsSince(d, "2026-11-02"), null).leadsSince === null);
+ok("깨진 기준일은 무시(null)", ["내일", "2026-13-45", "2026/11/02", 20261102, ""].every((v) => w.setLeadsSince(d, v).leadsSince === null) && w.normalizeConfig({ version: 1, leadsSince: "아무거나" }).leadsSince === null);
+ok("저장된 기준일은 다시 읽어도 유지", w.normalizeConfig(JSON.parse(JSON.stringify(w.setLeadsSince(d, "2026-10-01")))).leadsSince === "2026-10-01");
+const cu = (createdAt, lastActivityAt) => ({ createdAt, lastActivityAt });
+ok("기준일 전에 들어오고 활동도 없으면 숨김", w.isBeforeSince(cu("2026-09-01T10:00:00", "2026-10-10"), "2026-11-02") === true);
+ok("기준일 이후에 들어왔으면 보임(당일 포함)", w.isBeforeSince(cu("2026-11-02T00:00:00", "2026-11-02"), "2026-11-02") === false);
+ok("옛 고객이라도 기준일 이후 활동이 있으면 보임(재문의·기록)", w.isBeforeSince(cu("2026-05-01", "2026-11-10"), "2026-11-02") === false);
+ok("기준일이 없으면 아무도 숨기지 않음", w.isBeforeSince(cu("2020-01-01", "2020-01-01"), null) === false);
+
 console.log(fail ? `FAIL ${fail}` : "ALL PASS");
 process.exit(fail ? 1 : 0);

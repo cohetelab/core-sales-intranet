@@ -221,12 +221,13 @@ export function useSheetLeadsState(active: boolean) {
       setCustomers((prev) => prev.map((c) => (target.has(c.id) ? apply(c) : c)));
       try {
         const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-        const data = (await res.json().catch(() => ({}))) as { results?: Record<string, { ok: boolean; reason?: string }>; error?: string; code?: string };
+        const data = (await res.json().catch(() => ({}))) as { results?: Record<string, { ok: boolean; reason?: string }>; error?: string; code?: string; detail?: string };
         if (res.status === 401) {
           setStatus("login");
           throw new Error("login");
         }
-        if (!res.ok || !data.results) throw new Error(data.code ?? data.error ?? "failed");
+        // 시트 스크립트가 알려 준 구체적 원인(detail)을 버리지 않고 화면까지 전달한다(어디서 막혔는지 알 수 있게)
+        if (!res.ok || !data.results) throw new Error(data.code ? `${data.code}${data.detail ? `|${data.detail}` : ""}` : (data.error ?? "failed"));
         const failed = Object.entries(data.results).filter(([, r]) => !r.ok);
         if (failed.length) {
           const failedIds = new Set(failed.map(([id]) => id));
@@ -239,8 +240,9 @@ export function useSheetLeadsState(active: boolean) {
         return data as Record<string, unknown>;
       } catch (e) {
         setCustomers((prev) => prev.map((c) => (before.has(c.id) ? (before.get(c.id) as Customer) : c)));
-        const code = e instanceof Error ? e.message : "";
-        setNotice({ kind: "error", source: "write", text: `시트에 쓰지 못했습니다 — ${CODE_TEXT[code] ?? REASON_TEXT[code] ?? "잠시 뒤에 다시 시도해 주세요"}` });
+        const [code, detail] = (e instanceof Error ? e.message : "").split("|");
+        const why = CODE_TEXT[code] ?? REASON_TEXT[code] ?? "잠시 뒤에 다시 시도해 주세요";
+        setNotice({ kind: "error", source: "write", text: `시트에 쓰지 못했습니다 — ${why}${detail ? ` (${detail})` : ""}` });
         return null;
       } finally {
         pending.current--;

@@ -67,6 +67,7 @@ import { OWNER_OPTIONS, SALES_REPS, UNASSIGNED } from "@/lib/sales-reps";
 import { ColumnWarning } from "@/components/column-warning";
 import { MineChip, useMyOnly } from "@/components/my-filter";
 import { useSheetLeads } from "@/components/sheet-leads-provider";
+import { useWorkspaceConfig } from "@/components/workspace-config";
 import type { Customer } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -126,6 +127,7 @@ const channelOf = (c: Customer) =>
 export function LeadsPanel() {
   const { customers: localCustomers, addCustomer, assignOwner: localAssign, moveStage } = useCustomerStore();
   const sheet = useSheetLeads();
+  const { openSettings } = useWorkspaceConfig();
   const csvMode = sheet.csvMode;
   const chooseCsvMode = sheet.setCsvMode;
   // 구글 시트 연동이 설정돼 있고 CSV 방식을 고르지 않았으면 시트가 원본이다. 아니면 브라우저 저장소 + CSV 가져오기로 동작한다.
@@ -691,6 +693,14 @@ export function LeadsPanel() {
               ))}
             </div>
           </div>
+          {sheetMode && sheet.since && (
+            <p className="text-xs text-muted-foreground" role="note" aria-label="기준일 안내">
+              {sheet.since} 이전 고객 {sheet.hiddenBySince.toLocaleString("ko-KR")}명은 숨겨져 있습니다(시트는 그대로).{" "}
+              <button type="button" className="underline underline-offset-2" onClick={() => openSettings("data")}>
+                기준일 바꾸기
+              </button>
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="담당 필터">
               {sheetMode && sheet.user && (

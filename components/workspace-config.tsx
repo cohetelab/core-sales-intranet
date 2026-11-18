@@ -24,6 +24,7 @@ import {
   moveWidget,
   resetStored,
   saveConfig,
+  setLeadsSince,
   setWidgetWidth,
   toggleMenu,
   toggleWidget,
@@ -36,7 +37,7 @@ import { cn } from "@/lib/utils";
 
 // 화면 설정(사이드바 메뉴 숨김·순서, 홈 카드 표시·순서·너비). 이 브라우저에 저장한다. 끄기는 숨기기라 주소로는 열린다.
 
-type Tab = "home" | "menu";
+type Tab = "home" | "menu" | "data";
 
 // 저장 상태: local(이 브라우저에만) · synced(팀 공용에 저장됨) · saving · error
 export type Sync =
@@ -238,12 +239,16 @@ export function WorkspaceConfigProvider({ children }: { children: React.ReactNod
             <TabsList>
               <TabsTrigger value="home">홈 카드</TabsTrigger>
               <TabsTrigger value="menu">사이드바 메뉴</TabsTrigger>
+              <TabsTrigger value="data">데이터 범위</TabsTrigger>
             </TabsList>
             <TabsContent value="home">
               <HomeCards />
             </TabsContent>
             <TabsContent value="menu">
               <SidebarMenus />
+            </TabsContent>
+            <TabsContent value="data">
+              <DataRange />
             </TabsContent>
           </Tabs>
           <div className="flex justify-end border-t pt-3">
@@ -254,6 +259,35 @@ export function WorkspaceConfigProvider({ children }: { children: React.ReactNod
         </DialogContent>
       </Dialog>
     </WorkspaceConfigContext.Provider>
+  );
+}
+
+// 데이터 범위: 기준일보다 옛 고객(그 뒤 활동도 없는)은 리드·파이프라인·리포트·홈에서 숨긴다. 시트는 건드리지 않는다.
+function DataRange() {
+  const { config, update } = useWorkspaceConfig();
+  const since = config.leadsSince;
+  return (
+    <div className="space-y-3 pt-2">
+      <p className="text-sm text-muted-foreground">
+        기준일보다 먼저 들어왔고 그 뒤로 기록·재문의도 없는 고객은 화면에서 숨깁니다. <b>구글 시트의 데이터는 그대로</b>이고, 기준일을 비우면 전부 다시 보입니다. 옛 고객이 다시 문의하거나 기록이 쌓이면 자동으로 다시 보입니다.
+      </p>
+      <label className="flex items-center gap-2 text-sm">
+        <span className="w-24 shrink-0">기준일</span>
+        <input
+          type="date"
+          aria-label="리드 기준일"
+          value={since ?? ""}
+          onChange={(e) => update((c) => setLeadsSince(c, e.target.value || null))}
+          className="h-9 rounded-md border bg-background px-2 text-sm"
+        />
+        <Button variant="outline" size="sm" disabled={!since} onClick={() => update((c) => setLeadsSince(c, null))}>
+          전체 보기
+        </Button>
+      </label>
+      <p className="text-xs text-muted-foreground">
+        {since ? `${since} 이전 고객을 숨기는 중입니다.` : "지금은 시트의 모든 고객이 보입니다."} 정리 알람·Slack 알림은 시트 전체를 기준으로 계산됩니다.
+      </p>
+    </div>
   );
 }
 
