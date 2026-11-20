@@ -8,6 +8,16 @@ import type { Activity, Customer, DealStage } from "./types";
 // 같은 연락처로 여러 번 들어온 문의는 고객 1명에 문의 이력으로 합친다.
 
 export const SERVICE_LABELS = ["숏폼", "인플루언서", "퍼포먼스", "종합 상담"] as const;
+
+// 시트 '단계' 칸의 드롭다운 값 → 앱의 단계. 시트 값: 리드 · 연락됨 · 딜 (제안중) · 제안서 전달 · 견적서 전달 · 계약서 전달 · 성사 · 실패/종료 · 부재중.
+// 계약서 전달은 아직 성사 전이라 제안 단계다('계약'이라는 글자가 있어도 계약 완료가 아니다). 옛 표기(계약·제안·상담)도 읽는다.
+// 실패/종료는 단계가 아니라 별도 표시(failed)라서 여기서는 다루지 않는다. 리드·부재중·빈 값은 undefined(리드).
+export function stageFromSheet(text: string): DealStage | undefined {
+  if (/성사/.test(text) || /계약(?!서)/.test(text)) return "won";
+  if (/딜|제안|견적|계약서/.test(text)) return "proposal";
+  if (/연락됨|상담/.test(text)) return "discovery";
+  return undefined;
+}
 export type ServiceLabel = (typeof SERVICE_LABELS)[number];
 
 export const CHANNELS = ["홈페이지", "META", "유선", "기타"] as const;
@@ -331,9 +341,11 @@ export function parseInquiryRows(rows: string[][], trackRows = true): LeadParseR
       rec.failed = true;
       if (!rec.failedAt || when > rec.failedAt) rec.failedAt = when;
     }
-    if (/계약/.test(stageText)) rec.stage = "won";
-    else if (rec.stage !== "won" && /제안/.test(stageText)) rec.stage = "proposal";
-    else if (!rec.stage && /상담/.test(stageText)) rec.stage = "discovery";
+    // 같은 고객의 여러 행 중 가장 앞선 단계를 쓴다(계약 > 제안 > 상담)
+    const rowStage = stageFromSheet(stageText);
+    if (rowStage === "won") rec.stage = "won";
+    else if (rowStage === "proposal" && rec.stage !== "won") rec.stage = "proposal";
+    else if (rowStage === "discovery" && !rec.stage) rec.stage = "discovery";
     groups.set(key, rec);
   });
 

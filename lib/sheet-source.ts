@@ -159,7 +159,7 @@ async function writeColumn(ids: string[], col: "담당자" | "단계", value: st
 export const assignOwners = (ids: string[], owner: string, user: string) =>
   writeColumn(ids, "담당자", owner === UNASSIGNED ? "" : owner, user);
 
-export const setContract = (ids: string[], user: string) => writeColumn(ids, "단계", "계약", user);
+export const setContract = (ids: string[], user: string) => writeColumn(ids, "단계", STAGE_SHEET_VALUE.won, user);
 
 // 파이프라인에서 카드를 옮길 때: 그 고객의 모든 문의 행의 '단계' 칸을 단계에 맞는 글자로 바꾼다(리드는 비움).
 export const setStage = (ids: string[], stage: DealStage, user: string) => writeColumn(ids, "단계", STAGE_SHEET_VALUE[stage], user);

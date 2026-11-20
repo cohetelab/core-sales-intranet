@@ -18,7 +18,7 @@ import { UNASSIGNED } from "@/lib/sales-reps";
 import type { Customer } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-// 구글 시트가 원본인 고객관리. 여기서 '고객'은 시트의 단계가 '계약'인 곳이다(영업이 수동으로 계약 후 넘기는 대상).
+// 구글 시트가 원본인 고객관리. 여기서 '고객'은 시트의 단계가 '성사'(계약 완료)인 곳이다(영업이 수동으로 계약 후 넘기는 대상).
 // 시트에는 사업자번호·프로젝트·매출 칸이 없어서, 문의 횟수와 계약 금액(시트의 '계약 금액' 칸)으로 보여 준다.
 
 const PAGE = 50;
@@ -55,7 +55,7 @@ export function SheetCustomers({ sheet }: { sheet: SheetLeads }) {
   const total = clients.reduce((s, c) => s + contractAmountOf(c.tags), 0);
   const n = (v: number) => v.toLocaleString("ko-KR");
   const stats: Stat[] = [
-    { label: "총 고객 수", value: `${n(clients.length)}곳`, footerTitle: "시트에서 단계가 '계약'인 고객" },
+    { label: "총 고객 수", value: `${n(clients.length)}곳`, footerTitle: "시트에서 단계가 '성사'인 고객" },
     { label: "계약 금액 기재", value: `${n(withAmount.length)}곳`, footerTitle: `전체 ${n(clients.length)}곳 중` },
     { label: "누적 계약 금액", value: formatContract(total), footerTitle: "고객별 계약 금액의 합계" },
   ];

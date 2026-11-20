@@ -1,7 +1,9 @@
 import type { DealStage } from "./types";
 
 // 파이프라인 단계를 시트의 '단계' 칸에 적는 글자. 리드는 칸을 비운다.
-export const STAGE_SHEET_VALUE: Record<DealStage, string> = { lead: "", discovery: "상담", proposal: "제안", won: "계약" };
+// 앱의 단계 → 시트 '단계' 칸에 쓰는 글자. 시트 칸이 드롭다운(리드·연락됨·딜 (제안중)·제안서 전달·견적서 전달·계약서 전달·성사·실패/종료·부재중)이라
+// 이 목록에 있는 값만 쓸 수 있다. 읽는 규칙은 lead-sheet.ts 의 stageFromSheet.
+export const STAGE_SHEET_VALUE: Record<DealStage, string> = { lead: "리드", discovery: "연락됨", proposal: "딜 (제안중)", won: "성사" };
 
 // 고객 태그("계약금액 ₩2,090,000")에서 계약 금액 숫자를 읽는다. 없으면 0.
 export function contractAmountOf(tags: string[]) {

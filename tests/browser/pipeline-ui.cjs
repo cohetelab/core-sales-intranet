@@ -43,19 +43,19 @@ const C = { stage: 4, contract: 16 };
   ok("상담 열로 이동(낙관적 반영)", await until(async () => (await col("discovery").getByRole("button", { name: "가짜브랜드10 카드" }).count()) === 1));
   ok("저장 완료 표시 '✓ 시트에 저장했습니다'", await until(async () => (await p.getByText("시트에 저장했습니다").count()) > 0));
   ok("저장 끝나면 '저장 중' 표시 없음", await until(async () => (await p.getByText("시트에 저장하는 중").count()) === 0 && (await p.getByText("저장 중", { exact: true }).count()) === 0));
-  ok("시트 단계 칸 = 상담",await until(async () => (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "상담")));
+  ok("시트 단계 칸 = 연락됨(상담)",await until(async () => (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "연락됨")));
   await card("가짜브랜드10").dragTo(col("proposal"));
-  ok("시트 단계 칸 = 제안", await until(async () => (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "제안")));
+  ok("시트 단계 칸 = 딜 (제안중)(제안)", await until(async () => (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "딜 (제안중)")));
   await card("가짜브랜드10").dragTo(col("won"));
-  ok("시트 단계 칸 = 계약", await until(async () => (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "계약")));
+  ok("시트 단계 칸 = 성사(계약)", await until(async () => (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "성사")));
   await card("가짜브랜드10").dragTo(col("lead"));
-  ok("리드로 되돌리면 시트 칸 비움", await until(async () => (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "")));
+  ok("리드로 되돌리면 시트 단계 칸 = 리드(시트 드롭다운 값)", await until(async () => (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "리드")));
 
   // 재문의 고객(가짜브랜드0, 두 행)은 모든 행에 기록
   await p.getByLabel("딜 검색").fill("1000-2000"); await p.waitForTimeout(300);
   ok("재문의 고객 행이 2개", (await rowsOf("가짜브랜드0")).length === 2);
   await card("가짜브랜드0").dragTo(col("proposal"));
-  ok("재문의 고객: 두 행 모두 제안", await until(async () => (await rowsOf("가짜브랜드0")).every((r) => r[C.stage] === "제안")));
+  ok("재문의 고객: 두 행 모두 딜 (제안중)", await until(async () => (await rowsOf("가짜브랜드0")).every((r) => r[C.stage] === "딜 (제안중)")));
 
   // 상세 패널 + 계약 금액
   await p.getByLabel("딜 검색").fill("7777-0001"); await p.waitForTimeout(300);
@@ -87,7 +87,7 @@ const C = { stage: 4, contract: 16 };
   ok("리드로 되돌리기는 막히고 안내가 뜸", await until(async () => (await p.getByText("리드로 되돌릴 수 없습니다").count()) === 1));
   ok("카드는 계약 열에 그대로 · 시트 단계 칸은 비어 있는 채", (await col("won").getByRole("button", { name: "금액만고객 카드" }).count()) === 1 && (await rowsOf("금액만고객")).every((r) => r[C.stage] === ""));
   await card("금액만고객").dragTo(col("proposal"));
-  ok("제안으로는 옮길 수 있음(시트 단계 = 제안)", await until(async () => (await rowsOf("금액만고객")).every((r) => r[C.stage] === "제안")) && await until(async () => (await col("proposal").getByRole("button", { name: "금액만고객 카드" }).count()) === 1));
+  ok("제안으로는 옮길 수 있음(시트 단계 = 딜 (제안중))", await until(async () => (await rowsOf("금액만고객")).every((r) => r[C.stage] === "딜 (제안중)")) && await until(async () => (await col("proposal").getByRole("button", { name: "금액만고객 카드" }).count()) === 1));
 
   // 파이프라인 ↔ 리드 인박스 이동 시 재로그인 없음
   await p.getByLabel("딜 검색").fill("");

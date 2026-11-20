@@ -11,7 +11,7 @@ export const maxDuration = 60;
 const ID = /^lead-[a-z0-9]{1,40}$/;
 const MAX_AMOUNT = 1_000_000_000_000;
 
-// 계약 전환: 시트의 '단계' 칸에 '계약'을 기록한다(그 고객의 모든 문의 행). 계약 금액을 같이 보내면 가장 최근 행의 '계약 금액' 칸에도 쓴다.
+// 계약 전환: 시트의 '단계' 칸에 '성사'를 기록한다(그 고객의 모든 문의 행). 계약 금액을 같이 보내면 가장 최근 행의 '계약 금액' 칸에도 쓴다.
 // 그 뒤로 이 고객은 리드 목록에서 빠진다.
 export async function POST(req: Request) {
   if (!leadsConfigured()) return NextResponse.json({ error: "not_configured" }, { status: 503 });

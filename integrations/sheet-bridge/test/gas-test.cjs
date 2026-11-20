@@ -141,12 +141,12 @@ const send = (e, updates, user = "u") => e.call({ token: T, action: "update", us
   // 시트 칸에 입력 규칙(드롭다운)이 걸려 있을 때: 허용 안 되는 값은 그 건만 실패로 돌려주고, 허용 목록을 알려 준다
   const STAGE = 5; // 단계 = E열
   const e = makeEnv(fixture());
-  e.data.validations[STAGE] = ["리드", "상담", "제안", "계약", "종료"];
+  e.data.validations[STAGE] = ["리드", "연락됨", "딜 (제안중)", "제안서 전달", "견적서 전달", "계약서 전달", "성사", "실패/종료", "부재중"];
   const stageUpd = (rowIdx, value) => upd(e, rowIdx, { col: "단계", expect: e.data.rows[rowIdx - 1][STAGE - 1], value });
-  const r = send(e, [stageUpd(4, "상담"), stageUpd(5, "실패/종료")]);
+  const r = send(e, [stageUpd(4, "연락됨"), stageUpd(5, "상담")]);
   ok("요청 전체가 죽지 않음(ok:true)", r.ok === true && r.results.length === 2, JSON.stringify(r));
-  ok("허용된 값은 그대로 기록", r.results[0].ok === true && e.data.rows[3][STAGE - 1] === "상담");
-  ok("허용 안 되는 값은 그 건만 rejected + 허용 목록", r.results[1].ok === false && r.results[1].reason === "rejected" && r.results[1].allowed.join() === "리드,상담,제안,계약,종료", JSON.stringify(r.results[1]));
+  ok("허용된 값은 그대로 기록", r.results[0].ok === true && e.data.rows[3][STAGE - 1] === "연락됨");
+  ok("허용 안 되는 값은 그 건만 rejected + 허용 목록", r.results[1].ok === false && r.results[1].reason === "rejected" && r.results[1].allowed.join() === "리드,연락됨,딜 (제안중),제안서 전달,견적서 전달,계약서 전달,성사,실패/종료,부재중", JSON.stringify(r.results[1]));
   ok("거절된 칸은 바뀌지 않음", e.data.rows[4][STAGE - 1] === "");
   const log = e.sheets.find((s) => s.name === "인트라넷_기록").rows.map((x) => x[7]);
   ok("기록 탭에 ok·rejected가 남음", log.includes("ok") && log.includes("rejected"), log.join());
@@ -157,11 +157,11 @@ const send = (e, updates, user = "u") => e.call({ token: T, action: "update", us
   // 규칙을 읽지 못하고, 위반 예외가 setValue 가 아니라 나중(flush)에 올라오는 경우에도 요청 전체가 죽지 않고 그 건만 실패
   const STAGE = 5;
   const e = makeEnv(fixture());
-  e.data.validations[STAGE] = ["리드", "상담", "제안", "계약", "종료"];
+  e.data.validations[STAGE] = ["리드", "연락됨", "딜 (제안중)", "제안서 전달", "견적서 전달", "계약서 전달", "성사", "실패/종료", "부재중"];
   e.data.validationHidden = true;
   e.data.lazyValidation = true;
   const stageUpd = (rowIdx, value) => upd(e, rowIdx, { col: "단계", expect: e.data.rows[rowIdx - 1][STAGE - 1], value });
-  const r = send(e, [stageUpd(4, "상담"), stageUpd(5, "실패/종료")]);
+  const r = send(e, [stageUpd(4, "연락됨"), stageUpd(5, "상담")]);
   ok("늦게 터지는 예외도 요청 전체가 죽지 않음", r.ok === true && r.results.length === 2, JSON.stringify(r));
   ok("늦은 예외: 규칙을 못 읽어도 그 건만 rejected", r.results[0].ok === true && r.results[1].ok === false && r.results[1].reason === "rejected", JSON.stringify(r.results));
   ok("늦은 예외: 시트 메시지가 그대로 전달됨", /Stages/.test(r.results[1].message || ""), r.results[1].message);

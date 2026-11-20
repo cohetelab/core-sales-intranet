@@ -45,7 +45,7 @@ export function ContractDialog({
           <AlertDialogTitle>{company}을(를) 계약으로 전환할까요?</AlertDialogTitle>
           <AlertDialogDescription>
             리드 목록에서 빠지고 &lsquo;계약&rsquo; 단계로 넘어갑니다. 활동 기록과 문의 이력은 그대로 따라갑니다.
-            {askAmount && " 시트의 '단계' 칸에 '계약'이 기록됩니다."}
+            {askAmount && " 시트의 '단계' 칸에 '성사'가 기록됩니다."}
           </AlertDialogDescription>
         </AlertDialogHeader>
         {askAmount && (
