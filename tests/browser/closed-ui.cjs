@@ -52,8 +52,12 @@ const C = { stage: 4, consult: 14 };
   await closeWith(["사유E홈"], null);
   const d = await dump();
   const lastLine = (nm) => { const rs = d.rows.filter((r) => r[1] === nm); return rs[rs.length - 1][C.consult].split("\n").pop(); };
-  ok("시트: 사유가 상담 기록 줄로 남음(무응답·가격·경쟁사), 사유 없이 종료한 건은 줄 없음",
-    /종료 사유: 무응답$/.test(lastLine("사유A홈")) && /종료 사유: 무응답$/.test(lastLine("사유B홈")) && /종료 사유: 가격$/.test(lastLine("사유C홈")) && /종료 사유: 경쟁사$/.test(lastLine("사유D메타")) && lastLine("사유E홈") === "");
+  const consultOf = (nm) => { const rs = d.rows.filter((r) => r[1] === nm); return rs[rs.length - 1][C.consult]; };
+  const beforeLast = (nm) => consultOf(nm).split("\n").slice(-2)[0];
+  ok("시트: 사유가 상담 기록 줄로 남음(무응답·가격·경쟁사), 사유 없이 종료한 건은 사유 줄 없음",
+    /종료 사유: 무응답$/.test(lastLine("사유A홈")) && /종료 사유: 무응답$/.test(lastLine("사유B홈")) && /종료 사유: 가격$/.test(lastLine("사유C홈")) && /종료 사유: 경쟁사$/.test(lastLine("사유D메타")) && !/종료 사유/.test(consultOf("사유E홈")));
+  ok("시트: 종료할 때 '(단계) … → 실패/종료' 줄이 사유 줄 바로 앞에 남음(사유 없이 종료한 건은 이 줄이 마지막)",
+    /\(단계\) .+ → 실패\/종료$/.test(beforeLast("사유A홈")) && /\(단계\) .+ → 실패\/종료$/.test(beforeLast("사유C홈")) && /\(단계\) .+ → 실패\/종료$/.test(lastLine("사유E홈")), `${beforeLast("사유A홈")} | ${lastLine("사유E홈")}`);
 
   // 리포트에서 집계 확인
   await p.goto(`${BASE}/reports`, { waitUntil: "networkidle" });

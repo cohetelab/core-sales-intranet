@@ -82,6 +82,10 @@ export function noteLine(user: string, text: string, now = Date.now()) {
 export const typedNoteLine = (user: string, text: string, type: string | null, now = Date.now()) =>
   noteLine(user, type ? `(${type}) ${text.trim()}` : text, now);
 
+// 단계를 옮길 때 히스토리에 자동으로 남기는 줄: [11.20 16:30 Ian] (단계) 연락됨 → 딜 (제안중). 빈 단계는 리드로 적는다.
+export const stageChangeLine = (user: string, from: string, to: string, now = Date.now()) =>
+  typedNoteLine(user, `${from.trim() || "리드"} → ${to.trim() || "리드"}`, "단계", now);
+
 export const formatContract = (amount: number) => `₩${Math.round(amount).toLocaleString("en-US")}`;
 
 // 표기가 달라도(예: "2026. 3. 12." 와 "2026-03-12") 같은 값이면 true. 시트에서 실제로 바뀌었는지 판단할 때 쓴다.

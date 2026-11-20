@@ -12,10 +12,14 @@ const KST_MS = 9 * 3_600_000;
 const FAILED_TAG = "실패/종료";
 const NOTE_SUMMARY = "1차 상담 내용";
 const STAMP = /\[(\d{2})\.(\d{2}) (\d{2}):(\d{2}) [^\]\n]{1,40}\]/g;
+// 단계를 옮길 때 자동으로 남기는 줄("[11.20 16:30 Ian] (단계) 연락됨 → …"). 사람이 연락한 기록이 아니다.
+const STAGE_LINE = /^\[\d{2}\.\d{2} \d{2}:\d{2} [^\]\n]{1,40}\][ \t]?\(단계\)/;
+export const withoutStageLines = (text: string) => text.split("\n").filter((l) => !STAGE_LINE.test(l)).join("\n");
 
 // 상담 내용 안의 "[MM.DD HH:mm 이름]" 시각들을 시각(ms)으로. 표시에 연도가 없어서
 // 문의가 들어온 해로 두되, 그러면 문의보다 이르게 되는 경우(연말→연초)는 다음 해로 본다.
-export function parseNoteStamps(text: string, inquiryIso: string, now: number): number[] {
+export function parseNoteStamps(text: string, inquiryIso: string, now: number, opts: { skipStage?: boolean } = {}): number[] {
+  if (opts.skipStage) text = withoutStageLines(text);
   const t0 = Date.parse(inquiryIso);
   if (Number.isNaN(t0)) return [];
   const y0 = new Date(t0 + KST_MS).getUTCFullYear();
@@ -39,7 +43,7 @@ export function firstResponseMs(c: Customer, now: number): number | null {
   if (Number.isNaN(t0)) return null;
   const stamps = c.activities
     .filter((a) => a.type === "note" && a.summary === NOTE_SUMMARY && a.detail)
-    .flatMap((a) => parseNoteStamps(a.detail ?? "", c.createdAt, now));
+    .flatMap((a) => parseNoteStamps(a.detail ?? "", c.createdAt, now, { skipStage: true })); // 응답 속도는 연락 기록만(단계 이동은 제외)
   if (stamps.length === 0) return null;
   return Math.max(0, Math.min(...stamps) - t0);
 }
@@ -92,4 +96,4 @@ export function formatDuration(ms: number | null): string {
 }
 
 // 상담 내용에 이미 시각이 붙은 기록 줄이 있는지(있으면 '첫 컨택 완료' 버튼은 필요 없다)
-export const hasStampedNote = (consult: string | undefined) => new RegExp(STAMP.source).test(consult ?? "");
+export const hasStampedNote = (consult: string | undefined) => new RegExp(STAMP.source).test(withoutStageLines(consult ?? ""));

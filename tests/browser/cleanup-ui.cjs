@@ -81,7 +81,7 @@ const dump = () => admin("dump");
   await p.getByRole("button", { name: "종료 해제" }).click();
   ok("종료 해제: 종료 목록에서 사라짐", await until(async () => !(await names()).includes(picked[0])));
   await until(async () => { d = await dump(); return rowsOf(picked[0]).every((r) => r[C.stage] === ""); });
-  ok("시트: 해제한 고객의 '단계'가 비워짐(상담 내용 사유 줄은 그대로 남음)", rowsOf(picked[0]).every((r) => r[C.stage] === "") && /종료 사유: 무응답$/.test(rowsOf(picked[0]).slice(-1)[0][C.consult]));
+  ok("시트: 해제한 고객의 '단계'가 비워짐(상담 내용 사유 줄은 그대로 남고, 끝에 '(단계) 실패/종료 → 리드' 줄이 붙음)", rowsOf(picked[0]).every((r) => r[C.stage] === "") && /종료 사유: 무응답\n/.test(rowsOf(picked[0]).slice(-1)[0][C.consult]) && /\(단계\) 실패\/종료 → 리드$/.test(rowsOf(picked[0]).slice(-1)[0][C.consult]));
   ok("해제하지 않은 2명은 계속 종료", picked.slice(1).every((nm) => rowsOf(nm).every((r) => r[C.stage] === "실패/종료")));
 
   // 5) 종료한 고객이 다시 문의하면 되살아남

@@ -3,7 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import { CLOSE_NOTE_TYPE, reasonNote, type CloseReason } from "@/lib/lead-cleanup";
-import { CONSULT_LIMIT, FIELD_COLUMN, FIELD_KEYS, STAGE_SHEET_VALUE, typedNoteLine, type FieldKey } from "@/lib/lead-fields";
+import { CONSULT_LIMIT, FIELD_COLUMN, FIELD_KEYS, STAGE_SHEET_VALUE, stageChangeLine, typedNoteLine, type FieldKey } from "@/lib/lead-fields";
 import { parseInquiryRows, recordToCustomer, type LeadRecord, type MissingColumn } from "@/lib/lead-sheet";
 import { UNASSIGNED } from "@/lib/sales-reps";
 import type { Customer, DealStage } from "@/lib/types";
@@ -123,8 +123,7 @@ type CellUpdate = { row: number; stamp: string; phone: string; col: string; expe
 async function writeColumn(ids: string[], col: "담당자" | "단계", value: string, user: string): Promise<WriteResult> {
   const snap = await getSnapshot({ fresh: true }); // 쓰기 직전에 시트를 새로 읽는다
   const results: WriteResult = {};
-  const updates: CellUpdate[] = [];
-  const owners: string[] = []; // updates[i]가 어느 고객 것인지
+  const updates: OwnedUpdate[] = [];
 
   for (const id of ids) {
     const rec = snap.records.get(id);
@@ -136,24 +135,33 @@ async function writeColumn(ids: string[], col: "담당자" | "단계", value: st
     for (const ref of rec.rowRefs) {
       const current = col === "담당자" ? ref.owner : ref.stage;
       if (current.trim() === value) continue; // 이미 같은 값
-      updates.push({ row: ref.row, stamp: ref.stamp, phone: ref.phone, col, expect: current, value });
-      owners.push(id);
+      updates.push({ owner: id, row: ref.row, stamp: ref.stamp, phone: ref.phone, col, expect: current, value });
+    }
+    // 단계를 옮기면 가장 최근 행의 상담 내용에 "(단계) 이전 → 새 단계" 줄을 남긴다(히스토리 타임라인에 보인다).
+    const latest = rec.rowRefs[rec.rowRefs.length - 1];
+    if (col === "단계" && latest && latest.stage.trim() !== value) {
+      const note = appendConsult(latest, [stageChangeLine(user, latest.stage, value)]);
+      if (note) updates.push({ owner: id, note: true, ...note });
     }
   }
 
   try {
-    for (let i = 0; i < updates.length; i += CHUNK) {
-      const data = await call({ action: "update", user, updates: updates.slice(i, i + CHUNK) });
-      const list = Array.isArray(data.results) ? (data.results as BridgeResult[]) : [];
-      for (const r of list) {
-        const id = owners[i + r.index];
-        if (id && !r.ok && results[id]?.ok) results[id] = { ok: false, reason: r.reason ?? "failed", detail: allowedText(r.allowed) };
-      }
-    }
+    await sendUpdates(updates, user, results);
   } finally {
     invalidateSnapshot();
   }
   return results;
+}
+
+type OwnedUpdate = CellUpdate & { owner: string; note?: boolean };
+type RowRef = LeadRecord["rowRefs"][number];
+
+// 가장 최근 문의 행의 '1차 상담 내용' 끝에 줄을 이어 붙이는 업데이트. 5000자를 넘으면 만들지 않는다(null).
+function appendConsult(latest: RowRef, lines: string[]): CellUpdate | null {
+  const existing = latest.raw.consult ?? "";
+  const value = `${existing.trim() ? `${existing.trim()}\n` : ""}${lines.join("\n")}`;
+  if (value.length > CONSULT_LIMIT) return null;
+  return { row: latest.row, stamp: latest.stamp, phone: latest.phone, col: FIELD_COLUMN.consult, expect: existing, value };
 }
 
 export const assignOwners = (ids: string[], owner: string, user: string) =>
@@ -184,7 +192,7 @@ async function sendUpdates(updates: (CellUpdate & { owner: string; note?: boolea
 export async function closeCustomers(ids: string[], reason: CloseReason | null, user: string): Promise<WriteResult> {
   const snap = await getSnapshot({ fresh: true });
   const results: WriteResult = {};
-  const updates: (CellUpdate & { owner: string; note?: boolean })[] = [];
+  const updates: OwnedUpdate[] = [];
   const line = reason ? typedNoteLine(user, reasonNote(reason), CLOSE_NOTE_TYPE) : "";
 
   for (const id of ids) {
@@ -199,12 +207,11 @@ export async function closeCustomers(ids: string[], reason: CloseReason | null, 
       updates.push({ owner: id, row: ref.row, stamp: ref.stamp, phone: ref.phone, col: "단계", expect: ref.stage, value: CLOSED });
     }
     const latest = rec.rowRefs[rec.rowRefs.length - 1];
-    if (reason && latest) {
-      const existing = latest.raw.consult ?? "";
-      const value = `${existing.trim() ? `${existing.trim()}\n` : ""}${line}`;
-      if (value.length <= CONSULT_LIMIT) {
-        updates.push({ owner: id, note: true, row: latest.row, stamp: latest.stamp, phone: latest.phone, col: FIELD_COLUMN.consult, expect: existing, value });
-      }
+    if (latest) {
+      // 단계 줄(이전 → 실패/종료) 다음에 사유 줄을 이어서 남긴다. 둘을 한 번에 붙여서 같은 칸에 두 번 쓰지 않는다.
+      const lines = [...(/실패|종료/.test(latest.stage) ? [] : [stageChangeLine(user, latest.stage, CLOSED)]), ...(line ? [line] : [])];
+      const note = lines.length ? appendConsult(latest, lines) : null;
+      if (note) updates.push({ owner: id, note: true, ...note });
     }
   }
   try {
@@ -219,7 +226,7 @@ export async function closeCustomers(ids: string[], reason: CloseReason | null, 
 export async function reopenCustomers(ids: string[], user: string): Promise<WriteResult> {
   const snap = await getSnapshot({ fresh: true });
   const results: WriteResult = {};
-  const updates: (CellUpdate & { owner: string })[] = [];
+  const updates: OwnedUpdate[] = [];
   for (const id of ids) {
     const rec = snap.records.get(id);
     if (!rec || rec.rowRefs.length === 0) {
@@ -230,6 +237,11 @@ export async function reopenCustomers(ids: string[], user: string): Promise<Writ
     for (const ref of rec.rowRefs) {
       if (!/실패|종료/.test(ref.stage)) continue;
       updates.push({ owner: id, row: ref.row, stamp: ref.stamp, phone: ref.phone, col: "단계", expect: ref.stage, value: "" });
+    }
+    const latest = rec.rowRefs[rec.rowRefs.length - 1];
+    if (latest && /실패|종료/.test(latest.stage)) {
+      const note = appendConsult(latest, [stageChangeLine(user, latest.stage, "")]);
+      if (note) updates.push({ owner: id, note: true, ...note });
     }
   }
   try {

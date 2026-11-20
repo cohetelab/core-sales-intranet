@@ -4,7 +4,7 @@ const BASE = "http://localhost:3010", FAKE = "http://127.0.0.1:4020";
 let fail = 0;
 const ok = (name, cond, extra = "") => { console.log(`${cond ? "✓" : "✗"} ${name}${extra ? "  " + extra : ""}`); if (!cond) fail++; };
 const admin = (op, body = {}) => fetch(`${FAKE}/admin/${op}`, { method: "POST", body: JSON.stringify(body) }).then((r) => r.json());
-const C = { stage: 4, contract: 16 };
+const C = { stage: 4, consult: 14, contract: 16 };
 
 (async () => {
   await admin("append", { cells: { 0: "2026-11-01 09:00", 1: "금액만고객", 2: "010-6000-0001", 5: "영상 제작", 6: "홈페이지", 16: "₩1,000,000" } });
@@ -50,6 +50,14 @@ const C = { stage: 4, contract: 16 };
   ok("시트 단계 칸 = 성사(계약)", await until(async () => (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "성사")));
   await card("가짜브랜드10").dragTo(col("lead"));
   ok("리드로 되돌리면 시트 단계 칸 = 리드(시트 드롭다운 값)", await until(async () => (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "리드")));
+
+  // 단계를 옮길 때마다 가장 최근 행의 상담 내용 끝에 "(단계) 이전 → 새 단계" 줄이 이어서 남는다
+  ok("상담 내용에 단계 줄 4개가 순서대로 쌓임(리드→연락됨→딜 (제안중)→성사→리드)", await until(async () => {
+    const rs = await rowsOf("가짜브랜드10");
+    const lines = (rs[rs.length - 1][C.consult] || "").split("\n").filter((l) => /^\[\d\d\.\d\d \d\d:\d\d [^\]]+\] \(단계\) /.test(l)).map((l) => l.replace(/^\[[^\]]+\] \(단계\) /, ""));
+    return lines.join(" | ") === "리드 → 연락됨 | 연락됨 → 딜 (제안중) | 딜 (제안중) → 성사 | 성사 → 리드";
+  }));
+  ok("단계 줄은 문의 행 하나(가장 최근 행)에만 남음", await (async () => { const rs = await rowsOf("가짜브랜드10"); return rs.filter((r) => /\(단계\)/.test(r[C.consult] || "")).length === 1; })());
 
   // 재문의 고객(가짜브랜드0, 두 행)은 모든 행에 기록
   await p.getByLabel("딜 검색").fill("1000-2000"); await p.waitForTimeout(300);
