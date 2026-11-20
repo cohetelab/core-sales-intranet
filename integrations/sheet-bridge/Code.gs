@@ -187,17 +187,27 @@ function update_(ss, sheet, body) {
       seen[dup] = true;
 
       var key = col + '|' + value;
-      if (!groups[key]) groups[key] = { col: col, value: value, rows: [] };
+      if (!groups[key]) groups[key] = { col: col, value: value, rows: [], indexes: [], logIdx: [] };
       groups[key].rows.push(row);
+      groups[key].indexes.push(index);
       results.push({ index: index, ok: true });
       logs.push([user, row, String(cells[stampCol]), u.col, String(cells[col]), value, 'ok']);
+      groups[key].logIdx.push(logs.length - 1);
     });
 
     // 같은 칸에 같은 값으로 쓰는 셀들은 한 번에 쓴다(담당자 일괄 배정이 빠르다).
+    // 시트의 입력 규칙(드롭다운 등)이 값을 거절하면 요청 전체를 실패시키지 않고, 그 값을 쓰려던 건만 실패로 돌려준다.
     Object.keys(groups).forEach(function (k) {
       var g = groups[k];
       var a1 = g.rows.map(function (row) { return columnLetter_(g.col) + row; });
-      sheet.getRangeList(a1).setValue(safeText_(g.value));
+      try {
+        sheet.getRangeList(a1).setValue(safeText_(g.value));
+      } catch (err) {
+        var allowed = allowedValues_(sheet, g.rows[0], g.col);
+        var message = String((err && err.message) || err).slice(0, 200);
+        g.indexes.forEach(function (i) { results[i] = { index: i, ok: false, reason: 'rejected', allowed: allowed, message: message }; });
+        g.logIdx.forEach(function (i) { logs[i][6] = 'rejected'; });
+      }
     });
 
     appendLog_(ss, logs);
@@ -205,6 +215,24 @@ function update_(ss, sheet, body) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// 그 칸에 걸린 입력 규칙이 목록(드롭다운)이면 허용된 값을 돌려준다. 규칙이 없거나 읽지 못하면 빈 목록.
+function allowedValues_(sheet, row, col) {
+  try {
+    var rule = sheet.getRange(row, col + 1).getDataValidation();
+    if (!rule) return [];
+    var kinds = SpreadsheetApp.DataValidationCriteria;
+    var type = rule.getCriteriaType();
+    var vals = rule.getCriteriaValues();
+    if (type === kinds.VALUE_IN_LIST && vals[0]) return vals[0].map(String).slice(0, 30);
+    if (type === kinds.VALUE_IN_RANGE && vals[0] && vals[0].getDisplayValues) {
+      return vals[0].getDisplayValues().reduce(function (all, r) { return all.concat(r); }, []).filter(String).slice(0, 30);
+    }
+  } catch (err) {
+    // 읽지 못하면 목록 없이 돌려준다
+  }
+  return [];
 }
 
 function appendLog_(ss, logs) {

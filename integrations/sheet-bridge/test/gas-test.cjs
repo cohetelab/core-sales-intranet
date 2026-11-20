@@ -137,5 +137,21 @@ const send = (e, updates, user = "u") => e.call({ token: T, action: "update", us
   ok("setupToken: 64자 토큰 생성, 다시 실행해도 같은 값", /^[0-9a-f]{64}$/.test(t1) && t1 === t2);
   ok("만든 토큰으로 읽기 가능, 틀린 토큰은 거절", e.call({ token: t1, action: "read" }).ok === true && e.call({ token: "x".repeat(64), action: "read" }).error === "unauthorized");
 }
+{
+  // 시트 칸에 입력 규칙(드롭다운)이 걸려 있을 때: 허용 안 되는 값은 그 건만 실패로 돌려주고, 허용 목록을 알려 준다
+  const STAGE = 5; // 단계 = E열
+  const e = makeEnv(fixture());
+  e.data.validations[STAGE] = ["리드", "상담", "제안", "계약", "종료"];
+  const stageUpd = (rowIdx, value) => upd(e, rowIdx, { col: "단계", expect: e.data.rows[rowIdx - 1][STAGE - 1], value });
+  const r = send(e, [stageUpd(4, "상담"), stageUpd(5, "실패/종료")]);
+  ok("요청 전체가 죽지 않음(ok:true)", r.ok === true && r.results.length === 2, JSON.stringify(r));
+  ok("허용된 값은 그대로 기록", r.results[0].ok === true && e.data.rows[3][STAGE - 1] === "상담");
+  ok("허용 안 되는 값은 그 건만 rejected + 허용 목록", r.results[1].ok === false && r.results[1].reason === "rejected" && r.results[1].allowed.join() === "리드,상담,제안,계약,종료", JSON.stringify(r.results[1]));
+  ok("거절된 칸은 바뀌지 않음", e.data.rows[4][STAGE - 1] === "");
+  const log = e.sheets.find((s) => s.name === "인트라넷_기록").rows.map((x) => x[7]);
+  ok("기록 탭에 ok·rejected가 남음", log.includes("ok") && log.includes("rejected"), log.join());
+  const r2 = send(e, [stageUpd(4, "")]);
+  ok("빈 값(리드로 되돌리기)은 허용", r2.results[0].ok === true && e.data.rows[3][STAGE - 1] === "");
+}
 console.log(fail ? `\n실패 ${fail}건` : "\n전부 통과");
 process.exit(fail ? 1 : 0);

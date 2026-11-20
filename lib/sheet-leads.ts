@@ -24,6 +24,7 @@ const REASON_TEXT: Record<string, string> = {
   formula: "수식이 들어 있는 칸이라 쓸 수 없습니다",
   not_found: "시트에서 이 문의를 찾지 못했습니다",
   not_writable: "쓸 수 없는 칸입니다",
+  rejected: "시트 칸의 입력 규칙(드롭다운)이 이 값을 받아주지 않습니다",
   login: "다시 로그인해 주세요",
 };
 // 서버가 알려 준 오류를 사람이 읽는 문구 + (원인 코드: 설명)으로 만든다. 코드가 없으면 HTTP 상태를 보여 준다.
@@ -221,7 +222,7 @@ export function useSheetLeadsState(active: boolean) {
       setCustomers((prev) => prev.map((c) => (target.has(c.id) ? apply(c) : c)));
       try {
         const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-        const data = (await res.json().catch(() => ({}))) as { results?: Record<string, { ok: boolean; reason?: string }>; error?: string; code?: string; detail?: string };
+        const data = (await res.json().catch(() => ({}))) as { results?: Record<string, { ok: boolean; reason?: string; detail?: string }>; error?: string; code?: string; detail?: string };
         if (res.status === 401) {
           setStatus("login");
           throw new Error("login");
@@ -232,7 +233,7 @@ export function useSheetLeadsState(active: boolean) {
         if (failed.length) {
           const failedIds = new Set(failed.map(([id]) => id));
           setCustomers((prev) => prev.map((c) => (failedIds.has(c.id) ? (before.get(c.id) ?? c) : c)));
-          const reasons = Array.from(new Set(failed.map(([, r]) => REASON_TEXT[r.reason ?? ""] ?? "시트에 반영하지 못했습니다")));
+          const reasons = Array.from(new Set(failed.map(([, r]) => (REASON_TEXT[r.reason ?? ""] ?? "시트에 반영하지 못했습니다") + (r.detail ? ` — 허용된 값: ${r.detail}` : ""))));
           setNotice({ kind: "error", source: "write", text: `${failed.length}건을 시트에 쓰지 못했습니다 — ${reasons.join(" · ")}` });
         } else {
           setSavedAt(new Date().toISOString());
@@ -329,7 +330,7 @@ export function useSheetLeadsState(active: boolean) {
       setNotice(null);
       try {
         const res = await fetch("/api/leads/record", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, changes, base }) });
-        const data = (await res.json().catch(() => ({}))) as { results?: Record<string, { ok: boolean; reason?: string }>; error?: string; code?: string; field?: string };
+        const data = (await res.json().catch(() => ({}))) as { results?: Record<string, { ok: boolean; reason?: string; detail?: string }>; error?: string; code?: string; field?: string };
         if (res.status === 401) {
           setStatus("login");
           return { ok: false, message: REASON_TEXT.login };

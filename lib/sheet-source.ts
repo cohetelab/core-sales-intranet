@@ -111,7 +111,11 @@ export const invalidateSnapshot = () => {
   cache = null;
 };
 
-export type WriteResult = Record<string, { ok: boolean; reason?: string }>;
+// detail: 시트가 값을 거절했을 때 그 칸에 허용된 값 목록(예: "리드, 상담, 제안")
+export type WriteResult = Record<string, { ok: boolean; reason?: string; detail?: string }>;
+
+type BridgeResult = { index: number; ok: boolean; reason?: string; allowed?: unknown };
+const allowedText = (v: unknown) => (Array.isArray(v) && v.length ? v.map(String).join(", ").slice(0, 200) : undefined);
 
 type CellUpdate = { row: number; stamp: string; phone: string; col: string; expect: string; value: string };
 
@@ -140,10 +144,10 @@ async function writeColumn(ids: string[], col: "담당자" | "단계", value: st
   try {
     for (let i = 0; i < updates.length; i += CHUNK) {
       const data = await call({ action: "update", user, updates: updates.slice(i, i + CHUNK) });
-      const list = Array.isArray(data.results) ? (data.results as { index: number; ok: boolean; reason?: string }[]) : [];
+      const list = Array.isArray(data.results) ? (data.results as BridgeResult[]) : [];
       for (const r of list) {
         const id = owners[i + r.index];
-        if (id && !r.ok && results[id]?.ok) results[id] = { ok: false, reason: r.reason ?? "failed" };
+        if (id && !r.ok && results[id]?.ok) results[id] = { ok: false, reason: r.reason ?? "failed", detail: allowedText(r.allowed) };
       }
     }
   } finally {
@@ -167,10 +171,10 @@ async function sendUpdates(updates: (CellUpdate & { owner: string; note?: boolea
   for (let i = 0; i < updates.length; i += CHUNK) {
     const part = updates.slice(i, i + CHUNK);
     const data = await call({ action: "update", user, updates: part.map((u) => ({ row: u.row, stamp: u.stamp, phone: u.phone, col: u.col, expect: u.expect, value: u.value })) });
-    const list = Array.isArray(data.results) ? (data.results as { index: number; ok: boolean; reason?: string }[]) : [];
+    const list = Array.isArray(data.results) ? (data.results as BridgeResult[]) : [];
     for (const r of list) {
       const u = part[r.index];
-      if (u && !r.ok && !u.note && results[u.owner]?.ok) results[u.owner] = { ok: false, reason: r.reason ?? "failed" };
+      if (u && !r.ok && !u.note && results[u.owner]?.ok) results[u.owner] = { ok: false, reason: r.reason ?? "failed", detail: allowedText(r.allowed) };
     }
   }
 }
@@ -236,7 +240,7 @@ export async function reopenCustomers(ids: string[], user: string): Promise<Writ
   return results;
 }
 
-export type FieldResult = { ok: boolean; reason?: string };
+export type FieldResult = { ok: boolean; reason?: string; detail?: string };
 
 // 상담 기록처럼 고객의 "가장 최근 문의 행"에 쓰는 칸들. base는 사용자가 폼을 열었을 때 보던 칸의 원문이다.
 // 쓰는 순간 시트의 칸이 base와 다르면(그 사이 누가 고쳤으면) 덮어쓰지 않고 conflict로 돌려준다.
