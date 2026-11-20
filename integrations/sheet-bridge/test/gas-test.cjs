@@ -153,5 +153,25 @@ const send = (e, updates, user = "u") => e.call({ token: T, action: "update", us
   const r2 = send(e, [stageUpd(4, "")]);
   ok("빈 값(리드로 되돌리기)은 허용", r2.results[0].ok === true && e.data.rows[3][STAGE - 1] === "");
 }
+{
+  // 규칙을 읽지 못하고, 위반 예외가 setValue 가 아니라 나중(flush)에 올라오는 경우에도 요청 전체가 죽지 않고 그 건만 실패
+  const STAGE = 5;
+  const e = makeEnv(fixture());
+  e.data.validations[STAGE] = ["리드", "상담", "제안", "계약", "종료"];
+  e.data.validationHidden = true;
+  e.data.lazyValidation = true;
+  const stageUpd = (rowIdx, value) => upd(e, rowIdx, { col: "단계", expect: e.data.rows[rowIdx - 1][STAGE - 1], value });
+  const r = send(e, [stageUpd(4, "상담"), stageUpd(5, "실패/종료")]);
+  ok("늦게 터지는 예외도 요청 전체가 죽지 않음", r.ok === true && r.results.length === 2, JSON.stringify(r));
+  ok("늦은 예외: 규칙을 못 읽어도 그 건만 rejected", r.results[0].ok === true && r.results[1].ok === false && r.results[1].reason === "rejected", JSON.stringify(r.results));
+  ok("늦은 예외: 시트 메시지가 그대로 전달됨", /Stages/.test(r.results[1].message || ""), r.results[1].message);
+}
+{
+  // 예상 못 한 예외는 server_error 에 줄 위치(@)가 붙는다
+  const e = makeEnv(fixture());
+  e.data.getDataRange = () => { throw new Error("boom"); };
+  const r = e.call({ token: T, action: "read" });
+  ok("server_error 메시지에 위치 표시", r.error === "server_error" && /boom/.test(r.message) && /@/.test(r.message), r.message);
+}
 console.log(fail ? `\n실패 ${fail}건` : "\n전부 통과");
 process.exit(fail ? 1 : 0);

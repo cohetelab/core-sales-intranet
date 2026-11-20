@@ -8,7 +8,7 @@ class FakeRange {
   getDisplayValues() { return Array.from({ length: this.nr }, (_, i) => Array.from({ length: this.nc }, (_, j) => this.sheet.get(this.r + i, this.c + j))); }
   setValues(v) { v.forEach((row, i) => row.forEach((x, j) => this.sheet.set(this.r + i, this.c + j, x))); }
   // 시트의 입력 규칙(드롭다운). sheet.validations[열 번호(1부터)] = 허용 값 목록
-  getDataValidation() { const list = this.sheet.validations[this.c]; return list ? { getCriteriaType: () => "VALUE_IN_LIST", getCriteriaValues: () => [list, true] } : null; }
+  getDataValidation() { const list = this.sheet.validationHidden ? null : this.sheet.validations[this.c]; return list ? { getAllowInvalid: () => false, getCriteriaType: () => "VALUE_IN_LIST", getCriteriaValues: () => [list, true] } : null; }
 }
 class FakeSheet {
   constructor(name, rows) { this.name = name; this.rows = rows.map(r => r.slice()); this.formulas = {}; this.calls = { rangeList: 0, setValue: 0 }; this.raw = {}; this.validations = {}; }
@@ -31,7 +31,11 @@ class FakeSheet {
           for (const ch of m[1]) col = col * 26 + (ch.charCodeAt(0) - 64);
           const list = sheet.validations[col];
           // 실제 구글처럼 입력 규칙에 없는 값(빈 값은 허용)을 쓰면 예외가 난다. 메시지는 규칙의 도움말 문구.
-          if (list && v !== "" && !list.includes(String(v))) throw new Error("You can customize these Stages in Settings & Instructions.");
+          if (list && v !== "" && !list.includes(String(v))) {
+            const msg = "You can customize these Stages in Settings & Instructions.";
+            if (sheet.lazyValidation) { sheet.pendingError = msg; continue; } // 실제 구글처럼 규칙 위반이 나중(flush·다음 호출)에야 예외로 올라오는 경우
+            throw new Error(msg);
+          }
           sheet.set(Number(m[2]), col, v);
           sheet.raw[a1] = v;
         }
@@ -59,7 +63,7 @@ function makeEnv(rows, { token = "secret-token", activeNull = false, spreadsheet
     LockService: { getScriptLock: () => ({ waitLock() { locks++; }, releaseLock() {} }) },
     Utilities: { formatDate: () => "2026-11-06 10:00:00", getUuid: () => require("crypto").randomUUID() },
     Logger: { log() {} },
-    SpreadsheetApp: { DataValidationCriteria: { VALUE_IN_LIST: "VALUE_IN_LIST", VALUE_IN_RANGE: "VALUE_IN_RANGE" }, getActiveSpreadsheet: () => (activeNull ? null : ss), openById: () => ss }, // activeNull: 시트에 붙지 않은 독립 프로젝트
+    SpreadsheetApp: { DataValidationCriteria: { VALUE_IN_LIST: "VALUE_IN_LIST", VALUE_IN_RANGE: "VALUE_IN_RANGE" }, flush: () => { if (data.pendingError) { const m = data.pendingError; data.pendingError = null; throw new Error(m); } }, getActiveSpreadsheet: () => (activeNull ? null : ss), openById: () => ss }, // activeNull: 시트에 붙지 않은 독립 프로젝트
   };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(CODE, "utf8"), ctx);

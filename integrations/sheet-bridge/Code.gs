@@ -121,7 +121,9 @@ function doPost(e) {
     if (body.action === 'update') return json_(update_(ss, sheet, body));
     return json_({ ok: false, error: 'bad_action' });
   } catch (err) {
-    return json_({ ok: false, error: 'server_error', message: String((err && err.message) || err).slice(0, 200) });
+    // 어디서 났는지 알 수 있게 스택의 첫 줄(줄 번호)도 덧붙인다.
+    var where = String((err && err.stack) || '').split('\n')[1] || '';
+    return json_({ ok: false, error: 'server_error', message: (String((err && err.message) || err).slice(0, 140) + ' @' + where.trim()).slice(0, 200) });
   }
 }
 
@@ -197,16 +199,24 @@ function update_(ss, sheet, body) {
 
     // 같은 칸에 같은 값으로 쓰는 셀들은 한 번에 쓴다(담당자 일괄 배정이 빠르다).
     // 시트의 입력 규칙(드롭다운 등)이 값을 거절하면 요청 전체를 실패시키지 않고, 그 값을 쓰려던 건만 실패로 돌려준다.
+    // 구글 시트는 쓰기를 모아서 처리해서, 규칙 위반 예외가 setValue 줄이 아니라 나중(다음 시트 호출)에 올라올 수 있다.
+    // 그래서 쓰기 전에 규칙을 직접 확인하고, 쓴 직후 flush 로 반영시켜 늦은 예외도 이 묶음의 실패로 잡는다.
     Object.keys(groups).forEach(function (k) {
       var g = groups[k];
+      var reject = function (allowed, message) {
+        g.indexes.forEach(function (i) { results[i] = { index: i, ok: false, reason: 'rejected', allowed: allowed, message: message }; });
+        g.logIdx.forEach(function (i) { logs[i][6] = 'rejected'; });
+      };
+      var allowed = allowedValues_(sheet, g.rows[0], g.col);
+      if (g.value !== '' && allowed.length && !ruleAllowsInvalid_(sheet, g.rows[0], g.col) && allowed.indexOf(g.value) < 0) {
+        return reject(allowed, '시트 칸의 입력 규칙에 없는 값입니다');
+      }
       var a1 = g.rows.map(function (row) { return columnLetter_(g.col) + row; });
       try {
         sheet.getRangeList(a1).setValue(safeText_(g.value));
+        SpreadsheetApp.flush();
       } catch (err) {
-        var allowed = allowedValues_(sheet, g.rows[0], g.col);
-        var message = String((err && err.message) || err).slice(0, 200);
-        g.indexes.forEach(function (i) { results[i] = { index: i, ok: false, reason: 'rejected', allowed: allowed, message: message }; });
-        g.logIdx.forEach(function (i) { logs[i][6] = 'rejected'; });
+        reject(allowed, String((err && err.message) || err).slice(0, 200));
       }
     });
 
@@ -214,6 +224,16 @@ function update_(ss, sheet, body) {
     return { ok: true, results: results };
   } finally {
     lock.releaseLock();
+  }
+}
+
+// 입력 규칙이 "잘못된 입력도 경고만 하고 허용"으로 설정돼 있는지. 읽지 못하면 허용 안 함으로 본다.
+function ruleAllowsInvalid_(sheet, row, col) {
+  try {
+    var rule = sheet.getRange(row, col + 1).getDataValidation();
+    return !!(rule && rule.getAllowInvalid && rule.getAllowInvalid());
+  } catch (err) {
+    return false;
   }
 }
 
