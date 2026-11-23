@@ -300,6 +300,32 @@ export function useSheetLeadsState(active: boolean) {
     [write]
   );
 
+  // 리터치 풀 배정: 묵은 고객을 한 영업에게 다시 배정한다(종료된 고객은 reopen이면 되살린다). 서버 한도(150명)를 넘지 않게 나눠서 보낸다.
+  const retouch = React.useCallback(
+    async (ids: string[], owner: string, reopen: boolean) => {
+      const BATCH = 100;
+      setBulk({ label: "리터치 배정", done: 0, total: ids.length });
+      let done = 0;
+      try {
+        for (let i = 0; i < ids.length; i += BATCH) {
+          const part = ids.slice(i, i + BATCH);
+          const data = await write("/api/leads/retouch", { ids: part, owner, reopen }, part, (c) => ({
+            ...c,
+            owner,
+            tags: reopen ? c.tags.filter((t) => t !== FAILED) : c.tags,
+          }));
+          if (!data) break; // 실패하면 거기서 멈춘다(오류 안내는 write가 띄운다)
+          done = Math.min(i + BATCH, ids.length);
+          setBulk({ label: "리터치 배정", done, total: ids.length });
+        }
+      } finally {
+        setBulk(null);
+      }
+      return done;
+    },
+    [write]
+  );
+
   // 계약 전환(선택: 계약 금액). 단계는 모든 문의 행에, 금액은 가장 최근 행에 기록된다.
   const convert = React.useCallback(
     async (id: string, amount?: number) => {
@@ -358,6 +384,6 @@ export function useSheetLeadsState(active: boolean) {
   return {
     status, user, customers, meta, missing, sheetUrl, gid, fetchedAt, refreshing, notice, csvMode, setCsvMode, savingIds, savedAt, bulk,
     dismissNotice: () => setNotice(null),
-    refresh, login, logout, assign, convert, moveStage, record, closeLeads, reopenLeads,
+    refresh, login, logout, assign, convert, moveStage, record, closeLeads, reopenLeads, retouch,
   };
 }

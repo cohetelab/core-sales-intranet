@@ -11,6 +11,7 @@ import {
   ExternalLinkIcon,
   LogOutIcon,
   RefreshCw,
+  RepeatIcon,
   SearchIcon,
   ShuffleIcon,
 } from "lucide-react";
@@ -43,6 +44,8 @@ import {
 import { AddCustomerDialog } from "@/components/customers/add-customer-dialog";
 import { ContractDialog } from "@/components/leads/contract-dialog";
 import { LeadDetailSheet } from "@/components/leads/lead-detail-sheet";
+import { RetouchPool } from "@/components/leads/retouch-pool";
+import { DEFAULT_RETOUCH_FILTER, retouchPool } from "@/lib/lead-retouch";
 import { LeadImportDialog } from "@/components/leads/lead-import-dialog";
 import { MetaSheetDialog } from "@/components/leads/meta-sheet-dialog";
 import { renderSheetStatus } from "@/components/leads/sheet-status-screen";
@@ -147,6 +150,7 @@ export function LeadsPanel() {
   const [check, setCheck] = React.useState<CheckId | null>(null);
   const [cleanup, setCleanup] = React.useState(false);
   const [cleanupDays, setCleanupDays] = React.useState<number>(DEFAULT_CLEANUP_DAYS);
+  const [retouchView, setRetouchView] = React.useState(false); // 리터치 풀(묵은 DB 재배정) 보기
   const [closeReason, setCloseReason] = React.useState("none");
   const [mine, setMine] = useMyOnly();
   // '내 리드만'이 켜져 있으면 로그인한 사람의 담당으로 본다(다른 담당 칩을 누르면 꺼진다).
@@ -281,6 +285,7 @@ export function LeadsPanel() {
   const ownerLoad = React.useMemo(() => loadByOwner(customers), [customers]);
   const response = React.useMemo(() => responseStats(customers, nowMs), [customers, nowMs]);
   const cleanupCount = React.useMemo(() => cleanupCounts(customers, nowMs), [customers, nowMs]);
+  const retouchCount = React.useMemo(() => (sheetMode ? retouchPool(customers, DEFAULT_RETOUCH_FILTER, nowMs).length : 0), [sheetMode, customers, nowMs]);
   function toggleCleanup() {
     // 정리 대기함: 오래 움직임이 없는 리드(종료 후보)를 가장 오래된 순으로 모아 보여 준다. 끄면 신규 리드로 돌아간다.
     const next = !cleanup;
@@ -425,6 +430,24 @@ export function LeadsPanel() {
   const showStage = stage === "all" || stage === "failed" || scheduleOnly || cleanup;
   const detail = sheetMode && detailId ? (customers.find((c) => c.id === detailId) ?? null) : null;
 
+  if (sheetMode && retouchView) {
+    return (
+      <div className="space-y-4">
+        <RetouchPool sheet={sheet} nowMs={nowMs} onOpen={setDetailId} onBack={() => setRetouchView(false)} />
+        <LeadDetailSheet
+          customer={detail}
+          row={detailId ? sheet.meta[detailId]?.row : undefined}
+          sheetUrl={sheet.sheetUrl}
+          gid={sheet.gid}
+          raw={detailId ? sheet.meta[detailId]?.raw : undefined}
+          user={sheet.user}
+          onRecord={sheet.record}
+          onClose={() => setDetailId(null)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -437,6 +460,10 @@ export function LeadsPanel() {
             <Button variant={cleanup ? "default" : "outline"} className="h-9 py-2" aria-pressed={cleanup} onClick={toggleCleanup}>
               <ArchiveIcon className="size-3.5" /> 정리 대기함
               <span className="tabular-nums opacity-80">{(cleanupCount[cleanupDays] ?? 0).toLocaleString("ko-KR")}</span>
+            </Button>
+            <Button variant="outline" className="h-9 py-2" onClick={() => setRetouchView(true)}>
+              <RepeatIcon className="size-3.5" /> 리터치 풀
+              <span className="tabular-nums opacity-80">{retouchCount.toLocaleString("ko-KR")}</span>
             </Button>
             <Button variant={scheduleOnly ? "default" : "outline"} className="h-9 py-2" aria-pressed={scheduleOnly} onClick={toggleSchedule}>
               <CalendarDaysIcon className="size-3.5" /> 일정관리

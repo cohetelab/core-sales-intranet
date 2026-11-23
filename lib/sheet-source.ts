@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { CLOSE_NOTE_TYPE, reasonNote, type CloseReason } from "@/lib/lead-cleanup";
 import { CONSULT_LIMIT, FIELD_COLUMN, FIELD_KEYS, STAGE_SHEET_VALUE, stageChangeLine, typedNoteLine, type FieldKey } from "@/lib/lead-fields";
 import { parseInquiryRows, recordToCustomer, type LeadRecord, type MissingColumn } from "@/lib/lead-sheet";
+import { RETOUCH_NEXT_ACTION } from "@/lib/lead-retouch";
 import { UNASSIGNED } from "@/lib/sales-reps";
 import type { Customer, DealStage } from "@/lib/types";
 
@@ -242,6 +243,43 @@ export async function reopenCustomers(ids: string[], user: string): Promise<Writ
     if (latest && /실패|종료/.test(latest.stage)) {
       const note = appendConsult(latest, [stageChangeLine(user, latest.stage, "")]);
       if (note) updates.push({ owner: id, note: true, ...note });
+    }
+  }
+  try {
+    await sendUpdates(updates, user, results);
+  } finally {
+    invalidateSnapshot();
+  }
+  return results;
+}
+
+// 리터치 풀 배정: 묵은 고객을 영업에게 다시 배정한다. 모든 문의 행의 '담당자'를 바꾸고, 종료된 고객은 reopen이 켜져 있으면 '단계'를 비워 되살린다.
+// 가장 최근 행의 상담 내용에 "(단계) 실패/종료 → 리드"(되살릴 때)와 "(메모) 리터치 풀 배정 → Ian" 줄을 남기고, '다음 액션 플랜'이 비어 있으면 채운다.
+// 줄·다음 액션 기록이 실패해도(충돌·길이) 배정 자체는 성공으로 둔다.
+export async function retouchAssign(ids: string[], owner: string, reopen: boolean, user: string): Promise<WriteResult> {
+  const snap = await getSnapshot({ fresh: true });
+  const results: WriteResult = {};
+  const updates: OwnedUpdate[] = [];
+  const who = owner.match(/\(([^)]+)\)/)?.[1] ?? owner;
+  const isClosed = (stage: string) => /실패|종료/.test(stage);
+  for (const id of ids) {
+    const rec = snap.records.get(id);
+    if (!rec || rec.rowRefs.length === 0) {
+      results[id] = { ok: false, reason: "not_found" };
+      continue;
+    }
+    results[id] = { ok: true };
+    for (const ref of rec.rowRefs) {
+      if (ref.owner.trim() !== owner) updates.push({ owner: id, row: ref.row, stamp: ref.stamp, phone: ref.phone, col: "담당자", expect: ref.owner, value: owner });
+      if (reopen && isClosed(ref.stage)) updates.push({ owner: id, row: ref.row, stamp: ref.stamp, phone: ref.phone, col: "단계", expect: ref.stage, value: "" });
+    }
+    const latest = rec.rowRefs[rec.rowRefs.length - 1];
+    const lines = [...(reopen && isClosed(latest.stage) ? [stageChangeLine(user, latest.stage, "")] : []), typedNoteLine(user, `리터치 풀 배정 → ${who}`, "메모")];
+    const note = appendConsult(latest, lines);
+    if (note) updates.push({ owner: id, note: true, ...note });
+    const nextAction = latest.raw.nextAction ?? "";
+    if (!nextAction.trim()) {
+      updates.push({ owner: id, note: true, row: latest.row, stamp: latest.stamp, phone: latest.phone, col: FIELD_COLUMN.nextAction, expect: nextAction, value: RETOUCH_NEXT_ACTION });
     }
   }
   try {

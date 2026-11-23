@@ -112,7 +112,7 @@ const list = (dir, suffix) => fs.readdirSync(T(dir)).filter((f) => f.endsWith(su
     const sheetEnv = { SHEET_SCRIPT_URL: `http://127.0.0.1:${PORT.sheet}/exec`, SHEET_SCRIPT_TOKEN: "secret-token", LEADS_PASSCODE: "lead-pass", WORKSPACE_CONFIG_FILE: CONFIG_FILE };
     const slackEnv = { ...sheetEnv, CRON_SECRET: "test-cron-secret-1234567890" };
     const warm = ["/api/leads/session", "/api/leads/digest", "/api/cron/digest", "/", "/leads", "/pipeline", "/reports"];
-    const sheetSuites = ["workspace", "workspace-team", "home", "mine", "closed", "cleanup", "former", "record", "history", "response", "pipeline", "reports", "checks", "missing", "kanban"].map((n) => T("browser", `${n}-ui.cjs`));
+    const sheetSuites = ["workspace", "workspace-team", "home", "mine", "closed", "cleanup", "retouch", "former", "record", "history", "response", "pipeline", "reports", "checks", "missing", "kanban"].map((n) => T("browser", `${n}-ui.cjs`));
 
     const groups = [
       { title: "시트 연동 화면", env: sheetEnv, items: sheetSuites.map((f) => [f]), sheet: true },
