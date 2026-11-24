@@ -6,6 +6,7 @@ import { CLOSE_NOTE_TYPE, reasonNote, type CloseReason } from "@/lib/lead-cleanu
 import { CONSULT_LIMIT, FIELD_COLUMN, FIELD_KEYS, STAGE_SHEET_VALUE, stageChangeLine, typedNoteLine, type FieldKey } from "@/lib/lead-fields";
 import { parseInquiryRows, recordToCustomer, type LeadRecord, type MissingColumn } from "@/lib/lead-sheet";
 import { RETOUCH_NEXT_ACTION } from "@/lib/lead-retouch";
+import { WIN_NOTE_TYPE, winReasonNote, type WinReason } from "@/lib/lead-won";
 import { UNASSIGNED } from "@/lib/sales-reps";
 import type { Customer, DealStage } from "@/lib/types";
 
@@ -121,7 +122,8 @@ const allowedText = (v: unknown) => (Array.isArray(v) && v.length ? v.map(String
 type CellUpdate = { row: number; stamp: string; phone: string; col: string; expect: string; value: string };
 
 // 고객 1명은 시트의 여러 문의 행일 수 있다. 같은 값을 그 고객의 모든 행의 해당 칸에 쓴다.
-async function writeColumn(ids: string[], col: "담당자" | "단계", value: string, user: string): Promise<WriteResult> {
+// extraLines: 단계 줄 뒤에 같은 상담 내용 칸에 함께 이어 붙일 줄(예: 성사 이유). 칸을 한 번만 쓰려고 단계 줄과 한꺼번에 붙인다.
+async function writeColumn(ids: string[], col: "담당자" | "단계", value: string, user: string, extraLines: string[] = []): Promise<WriteResult> {
   const snap = await getSnapshot({ fresh: true }); // 쓰기 직전에 시트를 새로 읽는다
   const results: WriteResult = {};
   const updates: OwnedUpdate[] = [];
@@ -141,7 +143,7 @@ async function writeColumn(ids: string[], col: "담당자" | "단계", value: st
     // 단계를 옮기면 가장 최근 행의 상담 내용에 "(단계) 이전 → 새 단계" 줄을 남긴다(히스토리 타임라인에 보인다).
     const latest = rec.rowRefs[rec.rowRefs.length - 1];
     if (col === "단계" && latest && latest.stage.trim() !== value) {
-      const note = appendConsult(latest, [stageChangeLine(user, latest.stage, value)]);
+      const note = appendConsult(latest, [stageChangeLine(user, latest.stage, value), ...extraLines]);
       if (note) updates.push({ owner: id, note: true, ...note });
     }
   }
@@ -168,7 +170,9 @@ function appendConsult(latest: RowRef, lines: string[]): CellUpdate | null {
 export const assignOwners = (ids: string[], owner: string, user: string) =>
   writeColumn(ids, "담당자", owner === UNASSIGNED ? "" : owner, user);
 
-export const setContract = (ids: string[], user: string) => writeColumn(ids, "단계", STAGE_SHEET_VALUE.won, user);
+// 계약 전환. reason(성사 이유)을 고르면 "(단계) … → 성사" 줄 다음에 "(메모) 성사 이유: …" 줄이 이어서 남는다.
+export const setContract = (ids: string[], user: string, reason: WinReason | null = null) =>
+  writeColumn(ids, "단계", STAGE_SHEET_VALUE.won, user, reason ? [typedNoteLine(user, winReasonNote(reason), WIN_NOTE_TYPE)] : []);
 
 // 파이프라인에서 카드를 옮길 때: 그 고객의 모든 문의 행의 '단계' 칸을 단계에 맞는 글자로 바꾼다(리드는 비움).
 export const setStage = (ids: string[], stage: DealStage, user: string) => writeColumn(ids, "단계", STAGE_SHEET_VALUE[stage], user);

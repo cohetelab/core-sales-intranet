@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { formatContract } from "@/lib/lead-fields";
+import { WIN_REASONS, type WinReason } from "@/lib/lead-won";
 import { leadsConfigured, sameOrigin, sessionUser } from "@/lib/leads-auth";
 import { SheetError, setContract, writeFields, type FieldResult } from "@/lib/sheet-source";
 
@@ -21,11 +22,16 @@ export async function POST(req: Request) {
 
   let id = "";
   let amount: number | null = null;
+  let reason: WinReason | null = null;
   try {
     const raw = await req.text();
     if (raw.length > 1000) return NextResponse.json({ error: "too_large" }, { status: 413 });
-    const body = JSON.parse(raw) as { id?: unknown; amount?: unknown };
+    const body = JSON.parse(raw) as { id?: unknown; amount?: unknown; reason?: unknown };
     id = String(body.id ?? "");
+    if (body.reason !== undefined && body.reason !== null && body.reason !== "") {
+      if (!(WIN_REASONS as readonly string[]).includes(String(body.reason))) return NextResponse.json({ error: "bad_request" }, { status: 400 });
+      reason = String(body.reason) as WinReason;
+    }
     if (body.amount !== undefined && body.amount !== null && body.amount !== "") {
       if (typeof body.amount !== "number" || !Number.isInteger(body.amount) || body.amount <= 0 || body.amount > MAX_AMOUNT) {
         return NextResponse.json({ error: "bad_amount" }, { status: 400 });
@@ -38,7 +44,7 @@ export async function POST(req: Request) {
   if (!ID.test(id)) return NextResponse.json({ error: "bad_request" }, { status: 400 });
 
   try {
-    const results = await setContract([id], user);
+    const results = await setContract([id], user, reason);
     let contract: FieldResult | undefined;
     if (amount !== null && results[id]?.ok) contract = (await writeFields(id, { contract: formatContract(amount) }, null, user)).contract;
     return NextResponse.json({ results, contract });

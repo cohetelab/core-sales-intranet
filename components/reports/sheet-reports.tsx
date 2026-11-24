@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MonthlySales } from "@/components/reports/monthly-sales";
+import { WinLoseReasons } from "@/components/reports/win-lose-reasons";
 import { formatDateTime } from "@/lib/format";
 import { formatContract } from "@/lib/lead-fields";
 import { REASON_KEYS, REASON_LABEL, closedReasonBreakdown, closedTotals, type ReasonRow } from "@/lib/lead-closed";
@@ -249,6 +250,8 @@ export function SheetReports({ sheet }: { sheet: SheetLeads }) {
           )}
         </CardContent>
       </Card>
+
+      <WinLoseReasons customers={sheet.customers} nowMs={nowMs} periodDays={periodDays} lose={reasonTotal.byReason} loseTotal={reasonTotal.closed} />
 
       <section aria-label="종료 사유" className="space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">

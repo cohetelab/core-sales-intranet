@@ -339,8 +339,8 @@ export function LeadsPanel() {
     if (sheetMode) await sheet.assign(ids, owner);
     else localAssign(ids, owner);
   }
-  function convertToContract(id: string, amount?: number) {
-    if (sheetMode) void sheet.convert(id, amount);
+  function convertToContract(id: string, amount?: number, reason?: string) {
+    if (sheetMode) void sheet.convert(id, amount, reason);
     else moveStage(id, "won");
   }
 
@@ -964,7 +964,7 @@ export function LeadsPanel() {
                         {c.stage === "won" ? (
                           <Badge variant="secondary">계약됨</Badge>
                         ) : (
-                          <ContractDialog company={c.company} askAmount={sheetMode} onConfirm={(amount) => convertToContract(c.id, amount)} />
+                          <ContractDialog company={c.company} askAmount={sheetMode} onConfirm={(amount, reason) => convertToContract(c.id, amount, reason)} />
                         )}
                       </TableCell>
                     </TableRow>

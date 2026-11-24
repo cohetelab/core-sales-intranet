@@ -328,8 +328,8 @@ export function useSheetLeadsState(active: boolean) {
 
   // 계약 전환(선택: 계약 금액). 단계는 모든 문의 행에, 금액은 가장 최근 행에 기록된다.
   const convert = React.useCallback(
-    async (id: string, amount?: number) => {
-      const data = await write("/api/leads/convert", amount ? { id, amount } : { id }, [id], (c) => ({ ...c, stage: "won" as const }));
+    async (id: string, amount?: number, reason?: string) => {
+      const data = await write("/api/leads/convert", { id, ...(amount ? { amount } : {}), ...(reason ? { reason } : {}) }, [id], (c) => ({ ...c, stage: "won" as const }));
       const contract = data?.contract as { ok: boolean; reason?: string } | undefined;
       if (contract && !contract.ok) {
         setNotice({ kind: "error", source: "write", text: `계약으로 전환했지만 계약 금액은 쓰지 못했습니다 — ${REASON_TEXT[contract.reason ?? ""] ?? "시트에 반영하지 못했습니다"}` });
