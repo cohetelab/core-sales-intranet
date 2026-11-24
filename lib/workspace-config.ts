@@ -3,13 +3,14 @@
 //
 // "끄기"는 숨기기다: 메뉴·카드에서만 사라지고, 주소를 직접 열면 화면은 열린다.
 
-export type WidgetId = "cleanup" | "status" | "pipeline" | "schedule" | "checks" | "response" | "deadline" | "months" | "activity" | "community" | "slack";
+export type WidgetId = "cleanup" | "status" | "target" | "pipeline" | "schedule" | "checks" | "response" | "deadline" | "months" | "activity" | "community" | "slack";
 export type WidgetWidth = 4 | 6 | 8 | 12; // 12칸 격자: 1/3 · 1/2 · 2/3 · 전체
 
 export type HomeWidget = { id: WidgetId; width: WidgetWidth; hidden: boolean };
 export type MenuConfig = { hidden: string[]; order: Record<string, string[]> };
 // leadsSince: 이 날짜(YYYY-MM-DD) 이전에 들어와서 그 뒤로 활동도 없는 고객은 화면에서 숨긴다(시트는 그대로). null이면 전부 보인다.
-export type WorkspaceConfig = { version: 1; menus: MenuConfig; home: HomeWidget[]; leadsSince: string | null };
+// targets: 영업별 월 계약 금액 목표(원). 이름 → 금액. 팀 공용이라 누가 바꿔도 모두에게 적용된다(과거 달의 달성률도 지금 목표로 계산한다).
+export type WorkspaceConfig = { version: 1; menus: MenuConfig; home: HomeWidget[]; leadsSince: string | null; targets: Record<string, number> };
 
 // 팀 공용 저장소에 들어가는 문서(서버가 version을 올리며 저장한다)
 export type TeamDoc = { version: number; updatedAt: string; updatedBy: string; config: WorkspaceConfig };
@@ -21,6 +22,7 @@ export const WIDTH_LABEL: Record<WidgetWidth, string> = { 4: "1/3", 6: "1/2", 8:
 export const WIDGETS: { id: WidgetId; label: string; width: WidgetWidth }[] = [
   { id: "cleanup", label: "정리 대기 알람", width: 12 },
   { id: "status", label: "영업 현황", width: 4 },
+  { id: "target", label: "월 목표 달성률", width: 8 },
   { id: "pipeline", label: "파이프라인 분석", width: 4 },
   { id: "schedule", label: "오늘·내일 일정", width: 4 },
   { id: "checks", label: "오늘의 점검", width: 4 },
@@ -43,7 +45,21 @@ export const defaultConfig = (): WorkspaceConfig => ({
   menus: { hidden: [...SAMPLE_MENU_URLS], order: {} },
   home: WIDGETS.map((w) => ({ id: w.id, width: w.width, hidden: false })),
   leadsSince: null,
+  targets: {},
 });
+
+export const MAX_TARGET = 100_000_000_000; // 월 목표 상한(1,000억원)
+// 저장된 목표를 읽을 때 모양을 검증한다: 이름 40자 이하 · 최대 20명 · 금액은 1 이상 상한 이하의 정수
+function normalizeTargets(v: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    if (Object.keys(out).length >= 20) break;
+    if (k.length === 0 || k.length > 40 || typeof val !== "number" || !Number.isInteger(val) || val < 1 || val > MAX_TARGET) continue;
+    out[k] = val;
+  }
+  return out;
+}
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const validSince = (v: unknown): v is string => typeof v === "string" && DATE_RE.test(v) && !Number.isNaN(Date.parse(v));
@@ -77,7 +93,7 @@ export function normalizeConfig(raw: unknown): WorkspaceConfig {
     for (const d of base.home) if (!seen.has(d.id)) kept.push(d);
     home = kept;
   }
-  return { version: 1, menus: { hidden, order }, home, leadsSince: validSince(r.leadsSince) ? r.leadsSince : null };
+  return { version: 1, menus: { hidden, order }, home, leadsSince: validSince(r.leadsSince) ? r.leadsSince : null, targets: normalizeTargets(r.targets) };
 }
 
 type Storage = Pick<globalThis.Storage, "getItem" | "setItem" | "removeItem">;
@@ -152,6 +168,14 @@ export function visibleCategories<C extends { id: string; items: readonly { url:
   return categories
     .map((cat) => ({ ...cat, items: applyOrder(cat.items, c.menus.order[cat.id]).filter((i) => !isMenuHidden(c, i.url)) }))
     .filter((cat) => cat.items.length > 0);
+}
+
+// 영업 한 명의 월 목표 설정. 금액이 없거나 0 이하·범위 밖이면 목표를 지운다.
+export function setTarget(c: WorkspaceConfig, rep: string, amount: number | null): WorkspaceConfig {
+  const next = { ...c.targets };
+  if (amount !== null && Number.isInteger(amount) && amount >= 1 && amount <= MAX_TARGET) next[rep] = amount;
+  else delete next[rep];
+  return { ...c, targets: normalizeTargets(next) };
 }
 
 export const setLeadsSince = (c: WorkspaceConfig, since: string | null): WorkspaceConfig => ({ ...c, leadsSince: since && validSince(since) ? since : null });

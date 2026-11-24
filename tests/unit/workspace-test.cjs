@@ -7,7 +7,7 @@ const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.
 // 기본값
 const d = w.defaultConfig();
 ok("기본: 샘플 화면 8개가 숨김", d.menus.hidden.length === 8 && ["/team", "/weekly", "/calendar", "/quotes", "/campaigns", "/sales-invoices", "/agents", "/agents/routines"].every((u) => d.menus.hidden.includes(u)));
-ok("기본: 홈 카드 11개가 모두 표시", d.home.length === 11 && d.home.every((x) => !x.hidden));
+ok("기본: 홈 카드 12개가 모두 표시", d.home.length === 12 && d.home.every((x) => !x.hidden));
 ok("기본 카드 너비: 영업 현황 1/3 · 월별 문의 1/2 · 정리 대기 전체", d.home.find((x) => x.id === "status").width === 4 && d.home.find((x) => x.id === "months").width === 6 && d.home.find((x) => x.id === "cleanup").width === 12);
 ok("기본값은 호출마다 새 객체(공유 변경 방지)", w.defaultConfig() !== w.defaultConfig() && (w.defaultConfig().menus.hidden.push("x"), w.defaultConfig().menus.hidden.length === 8));
 
@@ -32,11 +32,11 @@ ok("대시보드(/)는 숨김 목록에서 제거", !n1.menus.hidden.includes("/
 ok("깨진 순서 목록은 버림", n1.menus.order.sales === undefined);
 ok("모르는 카드·중복 카드 제거, 앞에 저장된 순서 유지", n1.home[0].id === "slack" && n1.home[0].hidden === true && n1.home.filter((x) => x.id === "slack").length === 1 && !n1.home.some((x) => x.id === "없는카드"));
 ok("잘못된 너비는 기본 너비로", n1.home.find((x) => x.id === "status").width === 4);
-ok("새로 생긴 카드는 기본 설정으로 뒤에 덧붙음(누락 없음)", n1.home.length === 11);
+ok("새로 생긴 카드는 기본 설정으로 뒤에 덧붙음(누락 없음)", n1.home.length === 12);
 
 // 변경 규칙
 let m = w.moveWidget(d, "status", 1);
-ok("카드 아래로: status ↔ pipeline", m.home[1].id === "pipeline" && m.home[2].id === "status" && d.home[1].id === "status");
+ok("카드 아래로: status ↔ target(월 목표 달성률)", m.home[1].id === "target" && m.home[2].id === "status" && d.home[1].id === "status");
 ok("맨 위 카드를 위로·맨 아래를 아래로 올리면 그대로", JSON.stringify(w.moveWidget(d, "cleanup", -1).home.map((x) => x.id)) === JSON.stringify(d.home.map((x) => x.id)) && JSON.stringify(w.moveWidget(d, "slack", 1).home.map((x) => x.id)) === JSON.stringify(d.home.map((x) => x.id)));
 ok("너비 변경·표시 토글", w.setWidgetWidth(d, "status", 12).home[1].width === 12 && w.toggleWidget(d, "status").home[1].hidden === true && w.toggleWidget(w.toggleWidget(d, "status"), "status").home[1].hidden === false);
 ok("메뉴 숨김 토글(켜고 끄기)", w.isMenuHidden(w.toggleMenu(d, "/leads"), "/leads") && !w.isMenuHidden(w.toggleMenu(w.toggleMenu(d, "/leads"), "/leads"), "/leads"));

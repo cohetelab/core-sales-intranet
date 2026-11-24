@@ -9,6 +9,7 @@ import { StatGrid, type Stat } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { MonthlySales } from "@/components/reports/monthly-sales";
 import { formatDateTime } from "@/lib/format";
 import { formatContract } from "@/lib/lead-fields";
 import { REASON_KEYS, REASON_LABEL, closedReasonBreakdown, closedTotals, type ReasonRow } from "@/lib/lead-closed";
@@ -206,6 +207,8 @@ export function SheetReports({ sheet }: { sheet: SheetLeads }) {
         <FunnelTable title="채널별" label="채널" rows={byChannel} />
         <FunnelTable title="서비스별" label="서비스" rows={byService} />
       </div>
+
+      <MonthlySales customers={sheet.customers} nowMs={nowMs} />
 
       <Card className="shadow-xs py-0">
         <CardHeader className="pt-5 pb-2">

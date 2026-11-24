@@ -6,6 +6,7 @@ import { ArrowRightIcon, ChevronRightIcon, CircleIcon, RefreshCw, SlidersHorizon
 
 import { ColumnWarning } from "@/components/column-warning";
 import { DigestCard } from "@/components/home/digest-card";
+import { TargetCard } from "@/components/home/target-card";
 import { MineChip, useMyOnly } from "@/components/my-filter";
 import type { SheetLeads } from "@/components/sheet-leads-provider";
 import { useWorkspaceConfig } from "@/components/workspace-config";
@@ -91,6 +92,7 @@ export function SheetHome({ sheet }: { sheet: SheetLeads }) {
           </Button>
         </div>
       ) : null,
+    target: <TargetCard customers={customers} nowMs={nowMs} />,
     status: (
         <Card className="shadow-xs">
           <CardContent className="flex h-full flex-col gap-5">

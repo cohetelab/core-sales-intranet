@@ -86,7 +86,7 @@ const ok = (name, cond, extra = "") => { console.log(`${cond ? "✓" : "✗"} ${
   const cur = (await doc(A)).version;
   const bad = await A.ctx.request.put(`${BASE}/api/leads/workspace-config`, { headers: { origin: BASE }, data: { config: { version: 1, menus: { hidden: ["/", "/leads"], order: "깨짐" }, home: [{ id: "없는카드", width: 4 }] }, baseVersion: cur } });
   const badDoc = (await bad.json()).doc;
-  ok("서버가 모양을 검증: 대시보드는 숨김에서 빠지고 모르는 카드는 버려지며 빠진 카드는 채워짐", bad.ok() && !badDoc.config.menus.hidden.includes("/") && badDoc.config.menus.hidden.includes("/leads") && badDoc.config.home.length === 11 && !badDoc.config.home.some((w) => w.id === "없는카드"));
+  ok("서버가 모양을 검증: 대시보드는 숨김에서 빠지고 모르는 카드는 버려지며 빠진 카드는 채워짐", bad.ok() && !badDoc.config.menus.hidden.includes("/") && badDoc.config.menus.hidden.includes("/leads") && badDoc.config.home.length === 12 && !badDoc.config.home.some((w) => w.id === "없는카드"));
   const wrong = await A.ctx.request.put(`${BASE}/api/leads/workspace-config`, { headers: { origin: BASE }, data: { config: { version: 2 }, baseVersion: cur + 1 } });
   const conflict = await A.ctx.request.put(`${BASE}/api/leads/workspace-config`, { headers: { origin: BASE }, data: { config: { version: 1 }, baseVersion: 1 } });
   ok("잘못된 문서는 400, 오래된 baseVersion은 409(최신 문서 함께)", wrong.status() === 400 && conflict.status() === 409 && (await conflict.json()).doc.version === cur + 1, `${wrong.status()}/${conflict.status()}`);

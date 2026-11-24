@@ -35,10 +35,10 @@ const ok = (name, cond, extra = "") => { console.log(`${cond ? "✓" : "✗"} ${
 
   // 2) 홈 카드
   const def = await order();
-  ok("기본 홈 카드 11개가 정해진 순서로 보임", def.join() === "cleanup,status,pipeline,schedule,checks,response,deadline,months,activity,community,slack", def.join());
+  ok("기본 홈 카드 12개가 정해진 순서로 보임", def.join() === "cleanup,status,target,pipeline,schedule,checks,response,deadline,months,activity,community,slack", def.join());
   await p.getByRole("button", { name: "화면 편집" }).click();
   await dialog().waitFor();
-  ok("화면 편집 → 설정 창이 '홈 카드' 탭으로 열림", (await dialog().getByRole("tab", { name: "홈 카드" }).getAttribute("aria-selected")) === "true" && (await dialog().getByRole("list", { name: "홈 카드 목록" }).getByRole("listitem").count()) === 11);
+  ok("화면 편집 → 설정 창이 '홈 카드' 탭으로 열림", (await dialog().getByRole("tab", { name: "홈 카드" }).getAttribute("aria-selected")) === "true" && (await dialog().getByRole("list", { name: "홈 카드 목록" }).getByRole("listitem").count()) === 12);
   ok("안내: 끄면 숨겨질 뿐이고 주소로는 열림", (await dialog().innerText()).includes("주소를 직접 열면 화면은 열립니다"));
 
   await dialog().getByRole("checkbox", { name: "영업 현황 표시" }).click();
@@ -94,7 +94,7 @@ const ok = (name, cond, extra = "") => { console.log(`${cond ? "✓" : "✗"} ${
   ok("되돌리면 팀 숨김·리포트 표시로 복귀", (await link("팀").count()) === 0 && (await link("리포트").count()) === 1);
   await p.goto(`${BASE}/`, { waitUntil: "networkidle" });
   await p.waitForSelector("[data-widget]");
-  ok("홈 카드도 기본 11개·기본 순서로 복귀", (await order()).join() === def.join());
+  ok("홈 카드도 기본 12개·기본 순서로 복귀", (await order()).join() === def.join());
 
   // 7) 팀 공용: 한 사람이 바꾸면 다른 사람이 로그인했을 때도 같은 구성(서버에 저장). 자세한 시나리오는 workspace-team-ui.cjs
   await p.getByRole("button", { name: "화면 편집" }).click(); await dialog().waitFor();
