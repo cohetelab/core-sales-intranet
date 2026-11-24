@@ -46,7 +46,16 @@ const C = { stage: 4, consult: 14, contract: 16 };
   ok("시트 단계 칸 = 연락됨(상담)",await until(async () => (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "연락됨")));
   await card("가짜브랜드10").dragTo(col("proposal"));
   ok("시트 단계 칸 = 딜 (제안중)(제안)", await until(async () => (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "딜 (제안중)")));
+  // 계약 열로 옮기면 바로 옮기지 않고 계약 전환 창(금액·성사 이유)이 먼저 뜬다. 취소하면 그대로, 확인하면 성사로 기록된다.
   await card("가짜브랜드10").dragTo(col("won"));
+  const dlg = p.getByRole("alertdialog");
+  ok("계약 열로 옮기면 계약 전환 창이 뜸(상호명 표시)", await until(async () => (await dlg.count()) === 1 && (await dlg.innerText()).includes("가짜브랜드10")));
+  ok("창이 떠 있는 동안 시트 단계는 아직 그대로(딜 (제안중))", (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "딜 (제안중)"));
+  await dlg.getByRole("button", { name: "취소" }).click();
+  await p.waitForTimeout(500);
+  ok("취소하면 카드는 제안 열에 남고 시트도 그대로", (await col("proposal").getByRole("button", { name: "가짜브랜드10 카드" }).count()) === 1 && (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "딜 (제안중)"));
+  await card("가짜브랜드10").dragTo(col("won"));
+  await p.getByRole("alertdialog").getByRole("button", { name: "계약으로 전환" }).click();
   ok("시트 단계 칸 = 성사(계약)", await until(async () => (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "성사")));
   await card("가짜브랜드10").dragTo(col("lead"));
   ok("리드로 되돌리면 시트 단계 칸 = 리드(시트 드롭다운 값)", await until(async () => (await rowsOf("가짜브랜드10")).every((r) => r[C.stage] === "리드")));

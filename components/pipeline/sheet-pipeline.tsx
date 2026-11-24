@@ -3,6 +3,7 @@
 import * as React from "react";
 import { GripVerticalIcon, RefreshCw, SearchIcon } from "lucide-react";
 
+import { ContractDialog } from "@/components/leads/contract-dialog";
 import { LeadDetailSheet } from "@/components/leads/lead-detail-sheet";
 import { ColumnWarning } from "@/components/column-warning";
 import { MineChip, useMyOnly } from "@/components/my-filter";
@@ -213,6 +214,8 @@ export function SheetPipeline({ sheet }: { sheet: SheetLeads }) {
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [draggingId, setDraggingId] = React.useState<string | null>(null);
   const [blockNote, setBlockNote] = React.useState<string | null>(null);
+  // 카드를 계약 열로 옮기면 바로 옮기지 않고 계약 전환 창(금액·성사 이유)을 먼저 띄운다. 확인하면 계약 전환으로 처리된다.
+  const [pendingContract, setPendingContract] = React.useState<{ id: string; company: string } | null>(null);
   const [mine, setMine] = useMyOnly();
   // '내 리드만'이 켜져 있으면 로그인한 사람의 담당으로 본다(다른 담당 칩을 누르면 꺼진다).
   const owner = mine && sheet.user ? sheet.user : ownerState;
@@ -370,11 +373,27 @@ export function SheetPipeline({ sheet }: { sheet: SheetLeads }) {
                 return;
               }
               setBlockNote(null);
+              if (target === "won") {
+                setPendingContract({ id, company: card.company });
+                return;
+              }
               void sheet.moveStage(id, target);
             }}
           />
         ))}
       </div>
+
+      <ContractDialog
+        company={pendingContract?.company ?? ""}
+        askAmount
+        hideTrigger
+        open={pendingContract !== null}
+        onOpenChange={(o) => !o && setPendingContract(null)}
+        onConfirm={(amount, reason) => {
+          if (pendingContract) void sheet.convert(pendingContract.id, amount, reason);
+          setPendingContract(null);
+        }}
+      />
 
       <LeadDetailSheet
         customer={detail}

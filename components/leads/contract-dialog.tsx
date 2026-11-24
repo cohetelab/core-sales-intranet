@@ -26,10 +26,17 @@ export function ContractDialog({
   company,
   askAmount,
   onConfirm,
+  open,
+  onOpenChange,
+  hideTrigger,
 }: {
   company: string;
   askAmount: boolean;
   onConfirm: (amount?: number, reason?: string) => void;
+  // 칸반에서 카드를 계약 열로 옮길 때처럼 밖에서 열고 닫을 때 쓴다(버튼 없이)
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 }) {
   const [amount, setAmount] = React.useState("");
   const [reason, setReason] = React.useState("none");
@@ -38,12 +45,23 @@ export function ContractDialog({
   const tooBig = value > 1_000_000_000_000;
 
   return (
-    <AlertDialog onOpenChange={(open) => !open && (setAmount(""), setReason("none"))}>
-      <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 text-xs" aria-label={`${company} 계약으로 전환`}>
-          <ArrowRightLeftIcon className="size-3.5" /> 계약 전환
-        </Button>
-      </AlertDialogTrigger>
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          setAmount("");
+          setReason("none");
+        }
+        onOpenChange?.(next);
+      }}
+    >
+      {!hideTrigger && (
+        <AlertDialogTrigger asChild>
+          <Button variant="outline" size="sm" className="h-8 text-xs" aria-label={`${company} 계약으로 전환`}>
+            <ArrowRightLeftIcon className="size-3.5" /> 계약 전환
+          </Button>
+        </AlertDialogTrigger>
+      )}
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{company}을(를) 계약으로 전환할까요?</AlertDialogTitle>

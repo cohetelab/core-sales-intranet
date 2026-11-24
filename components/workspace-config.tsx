@@ -45,12 +45,16 @@ export type Sync =
   | { state: "loading" }
   | { state: "synced"; empty: boolean; updatedAt?: string; updatedBy?: string }
   | { state: "saving" }
+  | { state: "denied" } // 관리자가 아니라서 서버가 변경을 받아주지 않았다(서버의 설정으로 되돌렸다)
   | { state: "error" };
 
 type Ctx = {
   config: WorkspaceConfig;
   ready: boolean;
   sync: Sync;
+  user: string | null; // 로그인한 영업 이름(로그인 전이면 null)
+  admin: boolean; // 관리자인가(팀 공용 화면 설정·다른 사람의 목표를 바꿀 수 있다)
+  canEditTeam: boolean; // 팀 공용 화면 설정을 바꿀 수 있나(관리자이거나, 이 브라우저에만 적용되는 상태)
   update: (fn: (c: WorkspaceConfig) => WorkspaceConfig) => void;
   reset: () => void;
   openSettings: (tab?: Tab) => void;
@@ -78,6 +82,7 @@ export function WorkspaceConfigProvider({ children }: { children: React.ReactNod
   const [sync, setSync] = React.useState<Sync>({ state: "loading" });
   const [open, setOpen] = React.useState(false);
   const [tab, setTab] = React.useState<Tab>("home");
+  const [who, setWho] = React.useState<{ user: string | null; admin: boolean }>({ user: null, admin: false });
 
   // 화면 설정은 '변경 함수'로 받아서 적용한다. 팀 저장소에 저장할 때 그 사이 다른 사람이 먼저 바꿨으면(409),
   // 최신 설정 위에 같은 변경 함수를 다시 적용해서 두 사람의 변경이 모두 남게 한다.
@@ -113,6 +118,16 @@ export function WorkspaceConfigProvider({ children }: { children: React.ReactNod
           apply(ops.reduce((c, f) => f(c), doc.config)); // 최신 위에 내 변경을 다시 적용
           continue;
         }
+        if (res.status === 403) {
+          // 관리자가 아니라서 거절됨: 서버에 있는 설정으로 되돌리고 이 변경은 다시 보내지 않는다(본인 월 목표만 일반 영업이 바꿀 수 있다)
+          const { doc } = (await res.json().catch(() => ({}))) as { doc?: TeamDoc | null };
+          if (doc) {
+            versionRef.current = doc.version;
+            apply(doc.config);
+          }
+          setSync({ state: "denied" });
+          return;
+        }
         if (res.status === 401) canSync.current = false;
         throw new Error(String(res.status));
       }
@@ -137,6 +152,7 @@ export function WorkspaceConfigProvider({ children }: { children: React.ReactNod
       const res = await fetch("/api/leads/workspace-config", { cache: "no-store" });
       if (res.status === 401) {
         canSync.current = false;
+        setWho({ user: null, admin: false });
         return setSync({ state: "local", reason: "login" });
       }
       if (res.status === 503) {
@@ -144,7 +160,8 @@ export function WorkspaceConfigProvider({ children }: { children: React.ReactNod
         return setSync({ state: "local", reason: "no_backend" });
       }
       if (!res.ok) return setSync({ state: "error" });
-      const { backend, doc } = (await res.json()) as { backend: string; doc: TeamDoc | null };
+      const { backend, doc, admin, user } = (await res.json()) as { backend: string; doc: TeamDoc | null; admin?: boolean; user?: string };
+      setWho({ user: user ?? null, admin: admin === true });
       if (backend === "none") {
         canSync.current = false;
         return setSync({ state: "local", reason: "no_backend" });
@@ -221,8 +238,13 @@ export function WorkspaceConfigProvider({ children }: { children: React.ReactNod
     setOpen(true);
   }, []);
 
-  const value = React.useMemo(() => ({ config, ready, sync, update, reset, openSettings }), [config, ready, sync, update, reset, openSettings]);
-  const shared = sync.state === "synced" || sync.state === "saving";
+  // 팀 공용 설정은 관리자만 바꾼다. 팀 저장소를 못 쓰는 동안(로그인 전 등)에는 이 브라우저에만 적용되므로 막지 않는다.
+  const canEditTeam = who.admin || sync.state === "local" || sync.state === "loading";
+  const value = React.useMemo(
+    () => ({ config, ready, sync, user: who.user, admin: who.admin, canEditTeam, update, reset, openSettings }),
+    [config, ready, sync, who, canEditTeam, update, reset, openSettings]
+  );
+  const shared = sync.state === "synced" || sync.state === "saving" || sync.state === "denied";
   return (
     <WorkspaceConfigContext.Provider value={value}>
       {children}
@@ -235,6 +257,11 @@ export function WorkspaceConfigProvider({ children }: { children: React.ReactNod
             </DialogDescription>
           </DialogHeader>
           <SyncStatus sync={sync} />
+          {!canEditTeam && (
+            <p role="note" aria-label="관리자 전용" className="rounded-xl bg-muted px-3 py-1.5 text-xs text-muted-foreground">
+              팀 화면 설정(홈 카드·메뉴·데이터 범위)은 관리자만 바꿀 수 있습니다. 내 월 목표는 홈의 &lsquo;월 목표 달성률&rsquo; 카드에서 바꿀 수 있어요.
+            </p>
+          )}
           <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="flex-col">
             <TabsList>
               <TabsTrigger value="home">홈 카드</TabsTrigger>
@@ -242,17 +269,23 @@ export function WorkspaceConfigProvider({ children }: { children: React.ReactNod
               <TabsTrigger value="data">데이터 범위</TabsTrigger>
             </TabsList>
             <TabsContent value="home">
-              <HomeCards />
+              <fieldset disabled={!canEditTeam} className="contents">
+                <HomeCards />
+              </fieldset>
             </TabsContent>
             <TabsContent value="menu">
-              <SidebarMenus />
+              <fieldset disabled={!canEditTeam} className="contents">
+                <SidebarMenus />
+              </fieldset>
             </TabsContent>
             <TabsContent value="data">
-              <DataRange />
+              <fieldset disabled={!canEditTeam} className="contents">
+                <DataRange />
+              </fieldset>
             </TabsContent>
           </Tabs>
           <div className="flex justify-end border-t pt-3">
-            <Button variant="outline" size="sm" onClick={reset}>
+            <Button variant="outline" size="sm" onClick={reset} disabled={!canEditTeam}>
               <RotateCcwIcon className="size-3.5" /> 기본 설정으로 되돌리기
             </Button>
           </div>
@@ -301,6 +334,9 @@ function SyncStatus({ sync }: { sync: Sync }) {
   else if (sync.state === "synced") {
     text = sync.empty ? "팀 공용 설정 · 아직 저장된 적이 없어 기본 구성입니다. 바꾸면 모든 팀원에게 저장됩니다." : `팀 공용 설정 · 저장됨${sync.updatedBy ? ` (마지막 수정 ${sync.updatedBy.replace(/\(.*\)/, "")} ${kst(sync.updatedAt)})` : ""}`;
     tone = "bg-emerald-50 text-emerald-900";
+  } else if (sync.state === "denied") {
+    text = "관리자만 바꿀 수 있어서 변경이 반영되지 않았습니다. 서버에 저장된 설정으로 되돌렸습니다.";
+    tone = "bg-amber-50 text-amber-900";
   } else if (sync.state === "error") {
     text = "팀 설정을 저장하지 못했습니다. 이 브라우저에는 적용됐고 잠시 뒤 다시 시도합니다.";
     tone = "bg-amber-50 text-amber-900";

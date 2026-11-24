@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 
 import {
   SESSION_COOKIE,
+  adminNames,
+  adminPasscodeOk,
+  adminProtected,
+  isAdminName,
+  sessionIsAdmin,
   SESSION_PATH,
   SESSION_SECONDS,
   clearLoginFails,
@@ -30,7 +35,8 @@ const cookieBase = {
 export async function GET(req: Request) {
   const configured = leadsConfigured();
   return NextResponse.json(
-    { configured, user: configured ? sessionUser(req) : null, reps: SALES_REPS },
+    // admin: 이 로그인이 관리자인지 · admins: 관리자 이름 · adminProtected: 관리자 비밀번호가 설정돼 있는지(없으면 이름만 고르면 관리자가 된다)
+    { configured, user: configured ? sessionUser(req) : null, reps: SALES_REPS, admin: configured ? sessionIsAdmin(req) : false, admins: adminNames(), adminProtected: adminProtected() },
     { headers: { "Cache-Control": "no-store" } }
   );
 }
@@ -52,14 +58,17 @@ export async function POST(req: Request) {
   }
   const name = typeof body.name === "string" ? body.name : "";
   if (!(SALES_REPS as readonly string[]).includes(name)) return NextResponse.json({ error: "bad_name" }, { status: 400 });
-  if (typeof body.passcode !== "string" || !passcodeOk(body.passcode)) {
+  // 관리자 이름은 관리자 비밀번호가 설정돼 있으면 그 비밀번호로만 들어간다(공용 비밀번호는 거절). 그래야 이름만 골라서 관리자가 되는 일이 없다.
+  const asAdmin = isAdminName(name) && adminProtected();
+  const passOk = typeof body.passcode === "string" && (asAdmin ? adminPasscodeOk(body.passcode) : passcodeOk(body.passcode));
+  if (!passOk) {
     recordLoginFail(ip);
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   clearLoginFails(ip);
-  const res = NextResponse.json({ ok: true, user: name });
-  res.cookies.set(SESSION_COOKIE, newSession(name), { ...cookieBase, maxAge: SESSION_SECONDS });
+  const res = NextResponse.json({ ok: true, user: name, admin: isAdminName(name) });
+  res.cookies.set(SESSION_COOKIE, newSession(name, Date.now(), asAdmin), { ...cookieBase, maxAge: SESSION_SECONDS });
   return res;
 }
 

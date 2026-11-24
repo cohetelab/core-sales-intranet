@@ -13,6 +13,7 @@ const C = { stage: 4, consult: 14, contract: 16 };
   const S = (name, ph) => admin("append", { cells: { 0: stamp(now - 3 * D), 1: name, 2: ph, 5: "영상 제작", 6: "홈페이지" } });
   await S("성사확인A", "010-8100-0001");
   await S("성사확인B", "010-8100-0002");
+  await S("칸반성사", "010-8100-0003");
 
   const b = await chromium.launch();
   const ctx = await b.newContext({ viewport: { width: 1600, height: 1500 } });
@@ -52,6 +53,22 @@ const C = { stage: 4, consult: 14, contract: 16 };
   const bad = await ctx.request.post(`${BASE}/api/leads/convert`, { headers: { origin: BASE }, data: { id: "lead-abc123", reason: "아무거나" } });
   ok("목록에 없는 성사 이유는 400", bad.status() === 400, String(bad.status()));
 
+  // 3-2) 칸반에서 계약 열로 옮겨도 같은 창이 뜨고, 이유·금액이 기록된다
+  await p.goto(`${BASE}/pipeline`, { waitUntil: "networkidle" });
+  await p.getByLabel("딜 검색").fill("칸반성사"); await p.waitForTimeout(300);
+  await p.getByRole("button", { name: "칸반성사 카드" }).dragTo(p.locator('[data-stage="won"]'));
+  const kd = p.getByRole("alertdialog");
+  ok("칸반: 계약 열로 옮기면 성사 이유 선택칸이 있는 계약 전환 창이 뜸", await until(async () => (await kd.count()) === 1 && (await kd.getByRole("combobox", { name: "성사 이유" }).count()) === 1 && (await kd.innerText()).includes("칸반성사")));
+  ok("창이 떠 있는 동안 시트 단계는 그대로(옮겨지지 않음)", (await rowOf("칸반성사"))[C.stage] === "");
+  await kd.getByLabel("계약 금액(원)").fill("1500000");
+  await kd.getByRole("combobox", { name: "성사 이유" }).click();
+  await p.getByRole("option", { name: "응대 속도" }).click();
+  await kd.getByRole("button", { name: "계약으로 전환" }).click();
+  ok("칸반 계약: 시트 단계 = 성사 · 금액 ₩1,500,000", await until(async () => { const r = await rowOf("칸반성사"); return r[C.stage] === "성사" && r[C.contract] === "₩1,500,000"; }));
+  const K = await rowOf("칸반성사");
+  ok("칸반 계약: 단계 줄 다음에 '(메모) 성사 이유: 응대 속도' 줄", lines(K).length === 2 && /\(단계\) 리드 → 성사$/.test(lines(K)[0]) && /\(메모\) 성사 이유: 응대 속도$/.test(lines(K)[1]), K[C.consult]);
+  ok("칸반 계약: 카드가 계약 열로 이동", await until(async () => (await p.locator('[data-stage="won"]').getByRole("button", { name: "칸반성사 카드" }).count()) === 1));
+
   // 4) 리포트: 이기고 지는 이유 비교
   await p.goto(`${BASE}/reports`, { waitUntil: "networkidle" });
   const reg = p.getByRole("region", { name: "이기고 지는 이유" });
@@ -60,7 +77,7 @@ const C = { stage: 4, consult: 14, contract: 16 };
   ok("가격 줄: 이긴 건수 1건(2,090,000원)", await until(async () => (await t('tr[data-reason="가격"]')).includes("1건 (2,090,000원)")), await t('tr[data-reason="가격"]'));
   ok("이유 기록 안 함 줄: 이긴 건수 = 이유 없이 전환한 B + 시트에 원래 있던 계약", (await t('tr[data-reason="none"]')).includes("2건"), await t('tr[data-reason="none"]'));
   ok("진 이유(종료 사유)와 한 표: 표 머리글에 이긴 건수·진 건수", (await t("thead")).includes("이긴 건수") && (await t("thead")).includes("진 건수"));
-  ok("이김 합계 3건(A·B·시트 계약)", (await reg.innerText()).replace(/\s+/g, " ").includes("이김 3건"), (await reg.innerText()).replace(/\s+/g, " ").slice(0, 120));
+  ok("이김 합계 4건(A·B·칸반·시트 계약)", (await reg.innerText()).replace(/\s+/g, " ").includes("이김 4건"), (await reg.innerText()).replace(/\s+/g, " ").slice(0, 120));
   ok("종료 사유 섹션도 그대로 있음", (await p.getByRole("region", { name: "종료 사유" }).count()) + (await p.locator("section[aria-label='종료 사유']").count()) >= 1);
 
   ok("화면 오류 없음", errs.length === 0, errs.join(" | "));

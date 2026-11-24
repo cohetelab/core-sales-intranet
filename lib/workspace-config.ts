@@ -170,6 +170,13 @@ export function visibleCategories<C extends { id: string; items: readonly { url:
     .filter((cat) => cat.items.length > 0);
 }
 
+// 관리자가 아닌 사람은 본인 월 목표만 바꿀 수 있다. base(저장돼 있는 설정)와 next(저장하려는 설정)가 rep의 목표를 뺀 나머지가 같으면 true.
+export function isOwnTargetChange(base: WorkspaceConfig, next: WorkspaceConfig, rep: string): boolean {
+  const strip = (c: WorkspaceConfig) =>
+    JSON.stringify({ ...c, targets: Object.fromEntries(Object.entries(c.targets).filter(([k]) => k !== rep).sort(([a], [b]) => (a < b ? -1 : 1))) });
+  return strip(base) === strip(next);
+}
+
 // 영업 한 명의 월 목표 설정. 금액이 없거나 0 이하·범위 밖이면 목표를 지운다.
 export function setTarget(c: WorkspaceConfig, rep: string, amount: number | null): WorkspaceConfig {
   const next = { ...c.targets };

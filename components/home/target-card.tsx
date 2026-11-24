@@ -18,7 +18,9 @@ import type { Customer } from "@/lib/types";
 // 계약 날짜 칸이 시트에 없어서, 계약 시점은 '성사'로 옮긴 기록(정확)이나 마지막 활동(추정)으로 정한다.
 
 function TargetInput({ rep, value }: { rep: string; value: number | undefined }) {
-  const { update } = useWorkspaceConfig();
+  const { update, admin, user, sync } = useWorkspaceConfig();
+  // 관리자는 모두의 목표를, 일반 영업은 본인 목표만 바꾼다(서버도 같은 규칙으로 막는다). 팀 저장소를 못 쓰는 동안은 이 브라우저에서만 적용되므로 막지 않는다.
+  const editable = admin || rep === user || sync.state === "local";
   const shown = value ? String(Math.round(value / 10_000)) : "";
   const [text, setText] = React.useState(shown);
   React.useEffect(() => setText(shown), [shown]); // 다른 사람이 바꾼 값이 오면 따라간다
@@ -38,7 +40,9 @@ function TargetInput({ rep, value }: { rep: string; value: number | undefined })
       <Input
         inputMode="numeric"
         aria-label={`${rep.replace(/\(.*\)/, "")} 월 목표(만원)`}
-        placeholder="미설정"
+        placeholder={editable ? "미설정" : "-"}
+        title={editable ? undefined : "다른 사람의 목표는 관리자만 바꿀 수 있습니다"}
+        disabled={!editable}
         className="h-7 w-24 text-right text-xs tabular-nums"
         value={text}
         maxLength={7}

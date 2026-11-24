@@ -73,5 +73,21 @@ ok("목표 모양이 아예 틀려도(배열·문자) 빈 목표", Object.keys(w
 const many = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`영업${i}`, 1_000_000]));
 ok("목표는 최대 20명까지", Object.keys(w.normalizeConfig({ version: 1, targets: many }).targets).length === 20);
 
+// 관리자가 아닌 사람은 본인 월 목표만 바꿀 수 있다
+{
+  const base = w.setTarget(w.setTarget(w.defaultConfig(), "이익재(Ian)", 5_000_000), "김세현(Connor)", 8_000_000);
+  const own = w.setTarget(base, "이익재(Ian)", 6_000_000);
+  ok("본인 목표만 바꾸면 허용", w.isOwnTargetChange(base, own, "이익재(Ian)") === true);
+  ok("본인 목표를 지워도 허용", w.isOwnTargetChange(base, w.setTarget(base, "이익재(Ian)", null), "이익재(Ian)") === true);
+  ok("본인 목표를 처음 넣는 것도 허용", w.isOwnTargetChange(w.defaultConfig(), w.setTarget(w.defaultConfig(), "이익재(Ian)", 1_000_000), "이익재(Ian)") === true);
+  ok("다른 사람의 목표를 바꾸면 거절", w.isOwnTargetChange(base, w.setTarget(base, "김세현(Connor)", 1_000_000), "이익재(Ian)") === false);
+  ok("본인 목표와 함께 다른 사람 목표를 바꾸면 거절", w.isOwnTargetChange(base, w.setTarget(own, "김세현(Connor)", 1), "이익재(Ian)") === false);
+  ok("홈 카드를 바꾸면 거절", w.isOwnTargetChange(base, w.toggleWidget(base, "status"), "이익재(Ian)") === false);
+  ok("메뉴를 바꾸면 거절", w.isOwnTargetChange(base, w.toggleMenu(base, "/leads"), "이익재(Ian)") === false);
+  ok("기준일을 바꾸면 거절", w.isOwnTargetChange(base, w.setLeadsSince(base, "2026-10-01"), "이익재(Ian)") === false);
+  ok("본인 목표를 바꾸면서 홈 카드도 바꾸면 거절", w.isOwnTargetChange(base, w.toggleWidget(own, "status"), "이익재(Ian)") === false);
+  ok("아무것도 안 바꿔도 허용(같은 설정)", w.isOwnTargetChange(base, base, "이익재(Ian)") === true);
+}
+
 console.log(fail ? `FAIL ${fail}` : "ALL PASS");
 process.exit(fail ? 1 : 0);

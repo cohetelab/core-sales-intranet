@@ -22,6 +22,15 @@ export function SheetLoginCard({
   const [passcode, setPasscode] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
+  // 관리자 이름은 관리자 비밀번호가 따로 있을 수 있다(서버가 알려 준다)
+  const [adminInfo, setAdminInfo] = React.useState<{ admins: string[]; protected: boolean }>({ admins: [], protected: false });
+  React.useEffect(() => {
+    fetch("/api/leads/session", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((s: { admins?: string[]; adminProtected?: boolean }) => setAdminInfo({ admins: s.admins ?? [], protected: s.adminProtected === true }))
+      .catch(() => undefined);
+  }, []);
+  const needsAdminPass = adminInfo.protected && adminInfo.admins.includes(name);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -61,9 +70,10 @@ export function SheetLoginCard({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="leads-passcode">비밀번호</Label>
+            <Label htmlFor="leads-passcode">{needsAdminPass ? "관리자 비밀번호" : "비밀번호"}</Label>
             <Input id="leads-passcode" type="password" autoComplete="off" value={passcode} onChange={(e) => setPasscode(e.target.value)} aria-label="리드 화면 비밀번호" />
           </div>
+          {needsAdminPass && <p className="text-[11px] text-muted-foreground">관리자는 공용 비밀번호가 아니라 관리자 비밀번호로 들어갑니다.</p>}
           {error && (
             <p role="alert" className="text-xs text-destructive">
               {error}

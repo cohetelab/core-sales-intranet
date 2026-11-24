@@ -109,7 +109,8 @@ const list = (dir, suffix) => fs.readdirSync(T(dir)).filter((f) => f.endsWith(su
   if (wantE2e) {
     for (const p of Object.values(PORT)) if (await portBusy(p)) { console.error(`포트 ${p}를 이미 쓰는 프로세스가 있습니다. 끄고 다시 실행해 주세요.`); process.exit(2); }
 
-    const sheetEnv = { SHEET_SCRIPT_URL: `http://127.0.0.1:${PORT.sheet}/exec`, SHEET_SCRIPT_TOKEN: "secret-token", LEADS_PASSCODE: "lead-pass", WORKSPACE_CONFIG_FILE: CONFIG_FILE };
+    // 기존 시험은 두 사람이 모두 화면 설정을 바꾸므로 둘 다 관리자로 둔다(관리자 비밀번호 없음). 관리자 구분 시험은 아래에서 따로 서버를 띄운다.
+    const sheetEnv = { SHEET_SCRIPT_URL: `http://127.0.0.1:${PORT.sheet}/exec`, SHEET_SCRIPT_TOKEN: "secret-token", LEADS_PASSCODE: "lead-pass", WORKSPACE_CONFIG_FILE: CONFIG_FILE, LEADS_ADMINS: "이익재(Ian),김세현(Connor)" };
     const slackEnv = { ...sheetEnv, CRON_SECRET: "test-cron-secret-1234567890" };
     const warm = ["/api/leads/session", "/api/leads/digest", "/api/cron/digest", "/", "/leads", "/pipeline", "/reports"];
     const sheetSuites = ["workspace", "workspace-team", "home", "mine", "closed", "cleanup", "retouch", "target", "won", "former", "record", "history", "response", "pipeline", "reports", "checks", "missing", "kanban"].map((n) => T("browser", `${n}-ui.cjs`));
@@ -120,6 +121,7 @@ const list = (dir, suffix) => fs.readdirSync(T(dir)).filter((f) => f.endsWith(su
       { title: "Slack 알림 — 연결 안 됨", env: slackEnv, items: [[T("browser/digest-ui.cjs"), "unconfigured"]], sheet: true, slack: true },
       { title: "Slack 알림 — 허용되지 않는 주소", env: { ...slackEnv, SLACK_WEBHOOK_URL: "https://evil.example.com/hook" }, items: [[T("browser/digest-ui.cjs"), "evil"]], sheet: true, slack: true },
       { title: "팀 공용 설정 — Supabase Storage(가짜 서버)", env: { ...sheetEnv, WORKSPACE_CONFIG_FILE: "", SUPABASE_URL: `http://127.0.0.1:${PORT.supa}`, SUPABASE_SECRET_KEY: "fake-secret-key" }, items: [[T("browser/workspace-team-ui.cjs")]], sheet: true, supabase: true },
+      { title: "관리자 구분 — 관리자 비밀번호 · 본인 목표만 수정", env: { ...sheetEnv, LEADS_ADMINS: "김세현(Connor)", LEADS_ADMIN_PASSCODE: "admin-pass" }, items: [[T("browser/admin-ui.cjs")]], sheet: true },
       { title: "시트 설정이 없는 화면(샘플 화면)", env: {}, items: [[T("browser/local-home.cjs")], [T("browser/local-reports.cjs")], [T("browser/local-workspace.cjs")], [T("browser/kanban-ui.cjs"), "local"]], sheet: false },
     ];
 
