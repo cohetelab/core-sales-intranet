@@ -43,7 +43,8 @@ class FakeSheet {
     };
   }
 }
-function makeEnv(rows, { token = "secret-token", activeNull = false, spreadsheetId = null } = {}) {
+// code: 다른 브리지(예: 정산 시트 브리지)의 Code.gs 경로. 없으면 문의 시트 브리지.
+function makeEnv(rows, { token = "secret-token", activeNull = false, spreadsheetId = null, code = null } = {}) {
   const data = new FakeSheet("문의", rows);
   const sheets = [data];
   let locks = 0;
@@ -66,7 +67,7 @@ function makeEnv(rows, { token = "secret-token", activeNull = false, spreadsheet
     SpreadsheetApp: { DataValidationCriteria: { VALUE_IN_LIST: "VALUE_IN_LIST", VALUE_IN_RANGE: "VALUE_IN_RANGE" }, flush: () => { if (data.pendingError) { const m = data.pendingError; data.pendingError = null; throw new Error(m); } }, getActiveSpreadsheet: () => (activeNull ? null : ss), openById: () => ss }, // activeNull: 시트에 붙지 않은 독립 프로젝트
   };
   vm.createContext(ctx);
-  vm.runInContext(fs.readFileSync(CODE, "utf8"), ctx);
+  vm.runInContext(fs.readFileSync(code || CODE, "utf8"), ctx);
   const call = body => JSON.parse(ctx.module.exports.doPost({ postData: { contents: typeof body === "string" ? body : JSON.stringify(body) } }).text);
   return { data, ss, sheets, call, locks: () => locks, active: () => active, exports: ctx.module.exports, doPost: ctx.module.exports.doPost };
 }

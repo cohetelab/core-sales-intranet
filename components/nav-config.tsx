@@ -29,6 +29,7 @@ import {
   PlusCircleIcon,
   ChartNoAxesCombinedIcon,
   LayoutGridIcon,
+  SheetIcon,
 } from "lucide-react";
 
 export type NavItem = {
@@ -102,6 +103,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
     items: [
       { title: "크리에이터 정산", url: "/creator-settlements", icon: <WalletIcon /> },
       { title: "정산 건 등록", url: "/creator-settlements/new", icon: <PlusCircleIcon /> },
+      { title: "정산 시트", url: "/settlement-sheet", icon: <SheetIcon /> },
       { title: "매출 세금계산서", url: "/sales-invoices", icon: <ReceiptTextIcon /> },
     ],
   },

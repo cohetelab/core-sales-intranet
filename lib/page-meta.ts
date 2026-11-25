@@ -13,6 +13,7 @@ export const PAGE_META: Record<string, string> = {
   "/team": "팀",
   "/quotes": "계약·견적",
   "/reports": "리포트",
+  "/settlement-sheet": "정산 시트",
   "/weekly": "주간 보고",
   "/ad-creatives": "광고소재",
   "/landing-pages": "랜딩페이지",

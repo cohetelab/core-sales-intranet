@@ -14,7 +14,7 @@ const path = require("path");
 
 const ROOT = path.join(__dirname, "..");
 const T = (...p) => path.join(__dirname, ...p);
-const PORT = { app: 3010, sheet: 4020, slack: 4030, supa: 4040 };
+const PORT = { app: 3010, sheet: 4020, slack: 4030, supa: 4040, settle: 4021 };
 const APP = `http://localhost:${PORT.app}`;
 // 팀 공용 화면 설정은 테스트에서 파일에 저장한다(운영은 Supabase Storage). 테스트마다 비운다.
 const CONFIG_FILE = T("out", "workspace-config.json");
@@ -64,6 +64,13 @@ async function resetSupabase() {
   supaProc = start(T("support/fake-supabase.cjs"));
   if (!(await waitFor(() => fetch(`http://127.0.0.1:${PORT.supa}/_log`).then((r) => r.ok), 15000))) throw new Error("가짜 Supabase 서버가 뜨지 않았습니다");
 }
+let settleProc = null;
+async function startSettle() {
+  kill(settleProc);
+  await waitFor(async () => !(await portBusy(PORT.settle)), 8000);
+  settleProc = start(T("support/fake-settlement.cjs"));
+  if (!(await waitFor(() => fetch(`http://127.0.0.1:${PORT.settle}/_log`).then((r) => r.ok), 15000))) throw new Error("가짜 정산 시트 서버가 뜨지 않았습니다");
+}
 async function startSlack() {
   kill(slackProc);
   await waitFor(async () => !(await portBusy(PORT.slack)), 8000);
@@ -76,7 +83,8 @@ let appProc = null;
 async function startApp(env, warm) {
   kill(appProc);
   await waitFor(async () => !(await portBusy(PORT.app)), 10000);
-  appProc = start(path.join(ROOT, "node_modules/next/dist/bin/next"), env, ["dev", "-p", String(PORT.app)]);
+  // NEXT_DIST_DIR: 다른 곳에서 이 폴더의 개발 서버(.next)를 이미 띄워 놨어도 충돌하지 않게 시험용 빌드 폴더를 따로 쓴다
+  appProc = start(path.join(ROOT, "node_modules/next/dist/bin/next"), { ...env, NEXT_DIST_DIR: ".next-test" }, ["dev", "-p", String(PORT.app)]);
   if (!(await waitFor(() => fetch(`${APP}/api/leads/session`).then((r) => r.ok), 120000))) throw new Error("개발 서버가 뜨지 않았습니다");
   for (const u of warm) await fetch(`${APP}${u}`).catch(() => {}); // 처음 열 때 컴파일이 오래 걸려 테스트가 흔들리지 않게 미리 연다
 }
@@ -113,7 +121,7 @@ const list = (dir, suffix) => fs.readdirSync(T(dir)).filter((f) => f.endsWith(su
     const sheetEnv = { SHEET_SCRIPT_URL: `http://127.0.0.1:${PORT.sheet}/exec`, SHEET_SCRIPT_TOKEN: "secret-token", LEADS_PASSCODE: "lead-pass", WORKSPACE_CONFIG_FILE: CONFIG_FILE, LEADS_ADMINS: "이익재(Ian),김세현(Connor)" };
     const slackEnv = { ...sheetEnv, CRON_SECRET: "test-cron-secret-1234567890" };
     const warm = ["/api/leads/session", "/api/leads/digest", "/api/cron/digest", "/", "/leads", "/pipeline", "/reports"];
-    const sheetSuites = ["workspace", "workspace-team", "home", "mine", "closed", "cleanup", "retouch", "target", "won", "former", "record", "history", "response", "pipeline", "reports", "checks", "missing", "kanban"].map((n) => T("browser", `${n}-ui.cjs`));
+    const sheetSuites = ["workspace", "workspace-team", "home", "mine", "closed", "cleanup", "retouch", "target", "won", "settlement-setup", "former", "record", "history", "response", "pipeline", "reports", "checks", "missing", "kanban"].map((n) => T("browser", `${n}-ui.cjs`));
 
     const groups = [
       { title: "시트 연동 화면", env: sheetEnv, items: sheetSuites.map((f) => [f]), sheet: true },
@@ -122,6 +130,7 @@ const list = (dir, suffix) => fs.readdirSync(T(dir)).filter((f) => f.endsWith(su
       { title: "Slack 알림 — 허용되지 않는 주소", env: { ...slackEnv, SLACK_WEBHOOK_URL: "https://evil.example.com/hook" }, items: [[T("browser/digest-ui.cjs"), "evil"]], sheet: true, slack: true },
       { title: "팀 공용 설정 — Supabase Storage(가짜 서버)", env: { ...sheetEnv, WORKSPACE_CONFIG_FILE: "", SUPABASE_URL: `http://127.0.0.1:${PORT.supa}`, SUPABASE_SECRET_KEY: "fake-secret-key" }, items: [[T("browser/workspace-team-ui.cjs")]], sheet: true, supabase: true },
       { title: "관리자 구분 — 관리자 비밀번호 · 본인 목표만 수정", env: { ...sheetEnv, LEADS_ADMINS: "김세현(Connor)", LEADS_ADMIN_PASSCODE: "admin-pass" }, items: [[T("browser/admin-ui.cjs")]], sheet: true },
+      { title: "정산 시트(읽기 전용, 관리자만) — 가짜 정산 시트", env: { ...sheetEnv, LEADS_ADMINS: "김세현(Connor)", LEADS_ADMIN_PASSCODE: "admin-pass", SETTLEMENT_SCRIPT_URL: `http://127.0.0.1:${PORT.settle}/exec`, SETTLEMENT_SCRIPT_TOKEN: "settle-token" }, items: [[T("browser/settlement-ui.cjs")]], sheet: true, settle: true },
       { title: "시트 설정이 없는 화면(샘플 화면)", env: {}, items: [[T("browser/local-home.cjs")], [T("browser/local-reports.cjs")], [T("browser/local-workspace.cjs")], [T("browser/kanban-ui.cjs"), "local"]], sheet: false },
     ];
 
@@ -134,6 +143,7 @@ const list = (dir, suffix) => fs.readdirSync(T(dir)).filter((f) => f.endsWith(su
       for (const [file, ...fileArgs] of items) {
         if (g.sheet) await resetSheet();
         if (g.supabase) await resetSupabase();
+        if (g.settle) await startSettle(); // 시험마다 가짜 정산 시트 요청 기록을 비운다
         run(g.title, file, fileArgs);
       }
     }
