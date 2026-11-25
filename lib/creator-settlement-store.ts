@@ -3,6 +3,8 @@
 import * as React from "react";
 
 import type { ContentMetrics } from "@/lib/pms-metrics";
+import type { VideoCreative } from "@/lib/video-performance";
+import type { VideoProduction } from "@/lib/video-production";
 
 const STORAGE_KEY = "core-sales-creator-settlements-v1";
 
@@ -14,14 +16,18 @@ export type CreatorSettlement = {
   campaignName: string;
   resultUrl: string;
   amount: number;
+  contractAmount?: number;
   note: string;
+  bankReconciliationNote?: string;
   metrics?: ContentMetrics;
+  creative?: VideoCreative;
+  production?: VideoProduction;
   status: SettlementStatus;
   createdAt: string;
   updatedAt: string;
 };
 
-export type SettlementInput = Pick<CreatorSettlement, "creatorName" | "campaignName" | "resultUrl" | "amount" | "note">;
+export type SettlementInput = Pick<CreatorSettlement, "creatorName" | "campaignName" | "resultUrl" | "amount" | "note" | "contractAmount">;
 
 export const SETTLEMENT_STATUS_LABEL: Record<SettlementStatus, string> = {
   pending: "정산 대기",
@@ -74,7 +80,7 @@ export function useCreatorSettlements() {
     return record;
   };
 
-  const update = (id: string, patch: Partial<SettlementInput> & { status?: SettlementStatus; metrics?: ContentMetrics }) => {
+  const update = (id: string, patch: Partial<SettlementInput> & { status?: SettlementStatus; bankReconciliationNote?: string; metrics?: ContentMetrics; creative?: VideoCreative; production?: VideoProduction }) => {
     const next = records.map((record) =>
       record.id === id ? { ...record, ...patch, updatedAt: new Date().toISOString() } : record
     );

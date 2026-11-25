@@ -30,6 +30,7 @@ import { useCampaigns } from "@/lib/campaign-store";
 import { useCreatorSettlements, type SettlementStatus } from "@/lib/creator-settlement-store";
 import { useInfluencerStore } from "@/lib/influencer-store";
 import { engagementRate, interactions, type ContentMetrics } from "@/lib/pms-metrics";
+import { EMPTY_VIDEO_CREATIVE, FORMAT_LABEL, PLATFORM_LABEL, platformFromUrl, type VideoCreative, type VideoFormat, type VideoPlatform } from "@/lib/video-performance";
 
 type PmsRow = {
   id: string;
@@ -42,6 +43,7 @@ type PmsRow = {
   amount: number;
   settlementStatus: SettlementStatus;
   metrics: ContentMetrics;
+  creative: VideoCreative;
 };
 
 type ContentFilter = "all" | "uploaded" | "needs-url" | "needs-metrics";
@@ -78,6 +80,8 @@ export default function PmsPage() {
   const [query, setQuery] = React.useState("");
   const [filter, setFilter] = React.useState<ContentFilter>("all");
   const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [platformFilter, setPlatformFilter] = React.useState<VideoPlatform | "all">("all");
+  const [formatFilter, setFormatFilter] = React.useState<VideoFormat | "all">("all");
   const ready = campaignsReady && recordsReady;
 
   const handles = new Map(influencers.map((creator) => [creator.id, creator.handle]));
@@ -99,6 +103,7 @@ export default function PmsPage() {
         saves: creator.saves ?? 0,
         shares: creator.shares ?? 0,
       },
+      creative: creator.creative ?? { ...EMPTY_VIDEO_CREATIVE, platform: platformFromUrl(creator.uploadUrl) },
     }))
   );
   const manualRows: PmsRow[] = records.map((record) => ({
@@ -110,6 +115,7 @@ export default function PmsPage() {
     amount: record.amount,
     settlementStatus: record.status,
     metrics: { ...EMPTY_METRICS, ...record.metrics },
+    creative: record.creative ?? { ...EMPTY_VIDEO_CREATIVE, platform: platformFromUrl(record.resultUrl) },
   }));
   const rows = [...manualRows, ...campaignRows];
   const uploaded = rows.filter((row) => webUrl(row.resultUrl));
@@ -143,11 +149,11 @@ export default function PmsPage() {
   const maxViews = topContent[0]?.metrics.views ?? 1;
   const editing = rows.find((row) => row.id === editingId);
 
-  const saveMetrics = (row: PmsRow, resultUrl: string, metrics: ContentMetrics) => {
+  const saveMetrics = (row: PmsRow, resultUrl: string, metrics: ContentMetrics, creative: VideoCreative) => {
     if (row.source === "campaign" && row.campaignId && row.creatorId) {
-      updateCreator(row.campaignId, row.creatorId, { uploadUrl: resultUrl, ...metrics });
+      updateCreator(row.campaignId, row.creatorId, { uploadUrl: resultUrl, ...metrics, creative });
     } else if (row.source === "manual") {
-      update(row.id, { resultUrl, metrics });
+      update(row.id, { resultUrl, metrics, creative });
     }
     setEditingId(null);
   };
@@ -161,9 +167,10 @@ export default function PmsPage() {
             정산 목록의 크리에이터와 결과 URL을 가져와 업로드 콘텐츠의 ER을 관리합니다.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link href="/creator-settlements"><Link2Icon className="size-4" /> 정산 목록 열기</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline"><Link href="/pms/production">숏폼 제작 파이프라인 <ArrowUpRightIcon className="size-4" /></Link></Button>
+          <Button asChild variant="outline"><Link href="/creator-settlements"><Link2Icon className="size-4" /> 정산 목록 열기</Link></Button>
+        </div>
       </div>
 
       <Card className="border-primary/15 bg-primary/5 shadow-xs">
@@ -178,6 +185,56 @@ export default function PmsPage() {
       </Card>
 
       {ready && <StatGrid stats={stats} />}
+
+      <Card>
+        <CardHeader className="gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <CardTitle>영상별 성과 카드</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">훅과 형식을 기록해 조회수·ER을 나란히 비교합니다.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <select aria-label="플랫폼별 영상 필터" value={platformFilter} onChange={(event) => setPlatformFilter(event.target.value as VideoPlatform | "all")} className="h-9 rounded-md border bg-background px-3 text-sm">
+              <option value="all">모든 플랫폼</option>
+              {Object.entries(PLATFORM_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <select aria-label="형식별 영상 필터" value={formatFilter} onChange={(event) => setFormatFilter(event.target.value as VideoFormat | "all")} className="h-9 rounded-md border bg-background px-3 text-sm">
+              <option value="all">모든 형식</option>
+              {Object.entries(FORMAT_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!ready ? <p className="py-8 text-center text-sm text-muted-foreground">콘텐츠를 불러오는 중입니다.</p> : (() => {
+            const cards = uploaded.filter((row) => (platformFilter === "all" || row.creative.platform === platformFilter) && (formatFilter === "all" || row.creative.format === formatFilter));
+            return cards.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">조건에 맞는 영상이 없습니다. 정산 목록에 결과 URL을 등록하거나 필터를 바꿔 주세요.</p> : (
+              <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+                {cards.map((row) => <article key={row.id} className="space-y-4 rounded-xl border p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{row.creative.hook || `@${row.creatorName.replace(/^@/, "")} · 훅 미입력`}</p>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">@{row.creatorName.replace(/^@/, "")} · {row.campaignName || "캠페인 미입력"}</p>
+                    </div>
+                    <Button size="xs" variant="outline" onClick={() => setEditingId(row.id)}>편집</Button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 text-xs">
+                    <Badge variant="secondary">{PLATFORM_LABEL[row.creative.platform]}</Badge>
+                    <Badge variant="outline">{FORMAT_LABEL[row.creative.format]}</Badge>
+                    {row.creative.durationSeconds != null && <Badge variant="outline">{row.creative.durationSeconds}초</Badge>}
+                  </div>
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
+                    <div><dt className="text-muted-foreground">조회수</dt><dd className="mt-0.5 font-semibold tabular-nums">{row.metrics.views ? count(row.metrics.views) : "—"}</dd></div>
+                    <div><dt className="text-muted-foreground">ER</dt><dd className="mt-0.5 font-semibold tabular-nums">{erText(row.metrics)}</dd></div>
+                    <div><dt className="text-muted-foreground">평균 시청</dt><dd className="mt-0.5 font-semibold tabular-nums">{row.creative.averageWatchSeconds == null ? "—" : `${row.creative.averageWatchSeconds}초`}</dd></div>
+                    <div><dt className="text-muted-foreground">완주율</dt><dd className="mt-0.5 font-semibold tabular-nums">{row.creative.completionRate == null ? "—" : `${row.creative.completionRate}%`}</dd></div>
+                  </dl>
+                  {row.creative.cta && <p className="text-xs text-muted-foreground">CTA · {row.creative.cta}</p>}
+                  <a href={webUrl(row.resultUrl) ?? "#"} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">게시물 열기 <ExternalLinkIcon className="size-3" /></a>
+                </article>)}
+              </div>
+            );
+          })()}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -304,7 +361,7 @@ export default function PmsPage() {
       <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditingId(null)}>
         <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
           {editing && (
-            <MetricsForm key={editing.id} row={editing} onSave={(url, metrics) => saveMetrics(editing, url, metrics)} onCancel={() => setEditingId(null)} />
+            <MetricsForm key={editing.id} row={editing} onSave={(url, metrics, creative) => saveMetrics(editing, url, metrics, creative)} onCancel={() => setEditingId(null)} />
           )}
         </DialogContent>
       </Dialog>
@@ -318,7 +375,7 @@ function MetricsForm({
   onCancel,
 }: {
   row: PmsRow;
-  onSave: (url: string, metrics: ContentMetrics) => void;
+  onSave: (url: string, metrics: ContentMetrics, creative: VideoCreative) => void;
   onCancel: () => void;
 }) {
   const [resultUrl, setResultUrl] = React.useState(row.resultUrl);
@@ -330,6 +387,10 @@ function MetricsForm({
     shares: String(row.metrics.shares),
   });
   const [error, setError] = React.useState("");
+  const [creative, setCreative] = React.useState<VideoCreative>(row.creative);
+  const [duration, setDuration] = React.useState(row.creative.durationSeconds?.toString() ?? "");
+  const [averageWatch, setAverageWatch] = React.useState(row.creative.averageWatchSeconds?.toString() ?? "");
+  const [completion, setCompletion] = React.useState(row.creative.completionRate?.toString() ?? "");
 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -343,7 +404,15 @@ function MetricsForm({
       setError("성과 수치는 0 이상의 정수로 입력해 주세요.");
       return;
     }
-    onSave(url, metrics);
+    const optionalNumber = (value: string) => value.trim() === "" ? null : Number(value);
+    const durationSeconds = optionalNumber(duration);
+    const averageWatchSeconds = optionalNumber(averageWatch);
+    const completionRate = optionalNumber(completion);
+    if ([durationSeconds, averageWatchSeconds, completionRate].some((value) => value !== null && (!Number.isFinite(value) || value < 0)) || (durationSeconds !== null && (!Number.isInteger(durationSeconds) || durationSeconds === 0)) || (completionRate !== null && completionRate > 100)) {
+      setError("영상 길이와 시청 시간은 0 이상, 완주율은 0~100으로 입력해 주세요.");
+      return;
+    }
+    onSave(url, metrics, { ...creative, hook: creative.hook.trim(), cta: creative.cta.trim(), durationSeconds, averageWatchSeconds, completionRate });
   };
 
   return (
@@ -378,6 +447,21 @@ function MetricsForm({
             />
           </div>
         ))}
+      </div>
+      <div className="space-y-3 border-t pt-4">
+        <p className="text-sm font-medium">영상 정보</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2"><Label htmlFor="pms-platform">플랫폼</Label><select id="pms-platform" value={creative.platform} onChange={(event) => setCreative((current) => ({ ...current, platform: event.target.value as VideoPlatform }))} className="h-9 w-full rounded-md border bg-background px-3 text-sm">{Object.entries(PLATFORM_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+          <div className="space-y-2"><Label htmlFor="pms-format">형식</Label><select id="pms-format" value={creative.format} onChange={(event) => setCreative((current) => ({ ...current, format: event.target.value as VideoFormat }))} className="h-9 w-full rounded-md border bg-background px-3 text-sm">{Object.entries(FORMAT_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+        </div>
+        <div className="space-y-2"><Label htmlFor="pms-hook">첫 3초 훅</Label><Input id="pms-hook" maxLength={160} value={creative.hook} onChange={(event) => setCreative((current) => ({ ...current, hook: event.target.value }))} placeholder="예: 3일 써보고 달라진 점" /></div>
+        <div className="space-y-2"><Label htmlFor="pms-cta">CTA</Label><Input id="pms-cta" maxLength={160} value={creative.cta} onChange={(event) => setCreative((current) => ({ ...current, cta: event.target.value }))} placeholder="예: 프로필 링크에서 확인" /></div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="space-y-2"><Label htmlFor="pms-duration">영상 길이(초)</Label><Input id="pms-duration" type="number" min="1" step="1" value={duration} onChange={(event) => setDuration(event.target.value)} /></div>
+          <div className="space-y-2"><Label htmlFor="pms-average-watch">평균 시청(초)</Label><Input id="pms-average-watch" type="number" min="0" step="0.1" value={averageWatch} onChange={(event) => setAverageWatch(event.target.value)} /></div>
+          <div className="space-y-2"><Label htmlFor="pms-completion">완주율(%)</Label><Input id="pms-completion" type="number" min="0" max="100" step="0.1" value={completion} onChange={(event) => setCompletion(event.target.value)} /></div>
+        </div>
+        <p className="text-xs text-muted-foreground">평균 시청 시간과 완주율은 플랫폼에서 확인된 값만 입력하세요. 비워 두면 카드에 —로 표시합니다.</p>
       </div>
       <p className="text-xs text-muted-foreground">ER = (좋아요 + 댓글 + 저장 + 공유) ÷ 조회수 × 100</p>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

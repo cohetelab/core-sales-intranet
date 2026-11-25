@@ -131,7 +131,7 @@ const list = (dir, suffix) => fs.readdirSync(T(dir)).filter((f) => f.endsWith(su
       { title: "팀 공용 설정 — Supabase Storage(가짜 서버)", env: { ...sheetEnv, WORKSPACE_CONFIG_FILE: "", SUPABASE_URL: `http://127.0.0.1:${PORT.supa}`, SUPABASE_SECRET_KEY: "fake-secret-key" }, items: [[T("browser/workspace-team-ui.cjs")]], sheet: true, supabase: true },
       { title: "관리자 구분 — 관리자 비밀번호 · 본인 목표만 수정", env: { ...sheetEnv, LEADS_ADMINS: "김세현(Connor)", LEADS_ADMIN_PASSCODE: "admin-pass" }, items: [[T("browser/admin-ui.cjs")]], sheet: true },
       { title: "정산 시트(읽기 전용, 관리자만) — 가짜 정산 시트", env: { ...sheetEnv, LEADS_ADMINS: "김세현(Connor)", LEADS_ADMIN_PASSCODE: "admin-pass", SETTLEMENT_SCRIPT_URL: `http://127.0.0.1:${PORT.settle}/exec`, SETTLEMENT_SCRIPT_TOKEN: "settle-token" }, items: [[T("browser/settlement-ui.cjs")]], sheet: true, settle: true },
-      { title: "시트 설정이 없는 화면(샘플 화면)", env: {}, items: [[T("browser/local-home.cjs")], [T("browser/local-reports.cjs")], [T("browser/local-workspace.cjs")], [T("browser/kanban-ui.cjs"), "local"]], sheet: false },
+      { title: "시트 설정이 없는 화면(샘플 화면)", env: {}, items: [[T("browser/local-home.cjs")], [T("browser/local-reports.cjs")], [T("browser/local-workspace.cjs")], [T("browser/kanban-ui.cjs"), "local"], [T("browser/creator-settlements-ui.cjs")]], sheet: false },
     ];
 
     for (const g of groups) {

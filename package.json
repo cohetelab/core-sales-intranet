@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node tests/run-all.cjs",
-    "test:unit": "node tests/run-all.cjs --unit"
+    "test:unit": "node tests/run-all.cjs --unit",
+    "deepseek:bridge": "node scripts/deepseek-local-bridge.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",

@@ -1,0 +1,5 @@
+.next-test/
+tests/out/
+services/baalda/local/
+services/baalda/upstream/
+services/baalda/backups/

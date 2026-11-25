@@ -56,3 +56,16 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 | `ROOM_DISABLE_FALLBACK` | (선택) `1`이면 안전 거절 시 서버 폴백을 끈다 |
 
 Vercel: `vercel env add ANTHROPIC_API_KEY production`. 로컬: `.env.local`에 같은 이름으로 넣는다(커밋되지 않음).
+
+## 환경변수 (고객사 AI 조사)
+
+고객사 화면의 **AI 조사** 버튼(DeepSeek 웹 검색 + 사이트 읽기)은 아래 값이 모두 있어야 열립니다. 없으면 503으로 닫힙니다. 로그인이 없는 앱이라 `ROOM_PASSCODE`를 맞춘 요청만 처리합니다.
+
+| 이름 | 설명 |
+|---|---|
+| `DEEPSEEK_API_KEY` | DeepSeek API 키 (서버 전용). platform.deepseek.com에서 발급, 사용한 만큼 과금(토큰 + 검색·페이지 읽기 호출료) |
+| `ROOM_PASSCODE` | 에이전트 회의실과 같은 비밀번호를 공유한다 |
+| `RESEARCH_DAILY_CAP` | (선택) 인스턴스별 일일 조사 상한, 기본 50 |
+
+결과는 초안으로만 보여 주고 고객사 기록은 바꾸지 않습니다. 회사 이름과 사이트 주소가 DeepSeek 서버로 전송됩니다.
+

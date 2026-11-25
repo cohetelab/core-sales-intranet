@@ -31,9 +31,11 @@ const ok = (name, cond, extra = "") => { console.log(`${cond ? "✓" : "✗"} ${
   await openRail("홈");
   ok("기본: 홈 메뉴는 대시보드만(캘린더·주간 보고 숨김)", (await link("대시보드").count()) === 1 && (await link("캘린더").count()) === 0 && (await link("주간 보고").count()) === 0);
   await openRail("에이전트");
-  ok("기본: 에이전트는 허브·루틴 숨김, 회의실·관리·페퍼는 보임", (await link("에이전트 허브").count()) === 0 && (await link("루틴").count()) === 0 && (await link("회의실").count()) === 1 && (await link("페퍼").count()) === 1);
+  ok("기본: 에이전트 허브만 숨김, 루틴·회의실·관리·페퍼는 보임(루틴은 실행 가능해서 기본 표시)", (await link("에이전트 허브").count()) === 0 && (await link("루틴").count()) === 1 && (await link("회의실").count()) === 1 && (await link("페퍼").count()) === 1);
 
-  // 2) 홈 카드
+  // 2) 홈 카드 (사이드바에서 '캠페인'을 누르면 /campaigns 로 이동하므로 홈으로 돌아와서 본다)
+  await p.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await p.waitForSelector("[data-widget]");
   const def = await order();
   ok("기본 홈 카드 12개가 정해진 순서로 보임", def.join() === "cleanup,status,target,pipeline,schedule,checks,response,deadline,months,activity,community,slack", def.join());
   await p.getByRole("button", { name: "화면 편집" }).click();

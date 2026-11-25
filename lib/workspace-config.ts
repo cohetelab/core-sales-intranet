@@ -36,7 +36,7 @@ export const WIDGETS: { id: WidgetId; label: string; width: WidgetWidth }[] = [
 const WIDGET_IDS = WIDGETS.map((w) => w.id) as readonly string[];
 
 // 아직 시트와 연결되지 않은 샘플 데이터 화면(샘플 안내가 붙는 화면과 같은 목록). 처음에는 메뉴에서 숨긴다.
-export const SAMPLE_MENU_URLS = ["/calendar", "/weekly", "/quotes", "/team", "/campaigns", "/sales-invoices", "/agents", "/agents/routines"];
+export const SAMPLE_MENU_URLS = ["/calendar", "/weekly", "/quotes", "/team", "/campaigns", "/sales-invoices", "/agents"];
 // 숨기면 길을 잃는 메뉴(대시보드)는 숨길 수 없다.
 export const LOCKED_MENU_URLS = ["/"];
 

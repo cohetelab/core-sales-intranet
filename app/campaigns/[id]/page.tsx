@@ -44,8 +44,9 @@ export default function CampaignDetailPage() {
   }
 
   const needsMetrics = campaign.creators.some((c) => c.upload === "done" && c.views === 0);
-  const selectionRequired = campaign.selectionConfirmed === false;
-  const visibleTab = selectionRequired && (tab === "progress" || tab === "insights" || tab === "settlement") ? "selection" : tab;
+  const isShortform = campaign.campaignType === "shortform";
+  const selectionRequired = !isShortform && campaign.selectionConfirmed === false;
+  const visibleTab = isShortform && !["tasks", "notes"].includes(tab) ? "tasks" : selectionRequired && (tab === "progress" || tab === "insights" || tab === "settlement") ? "selection" : tab;
 
   return (
     <div className="space-y-4">
@@ -59,7 +60,7 @@ export default function CampaignDetailPage() {
           <div>
             <p className="text-sm font-semibold">{campaign.name}</p>
             <p className="text-xs text-muted-foreground">
-              {campaign.brand} · 진행률 {progressPercent(campaign)}%
+              {campaign.brand} · {isShortform ? "숏폼 제작" : `진행률 ${progressPercent(campaign)}%`}
             </p>
           </div>
         </div>
@@ -68,20 +69,22 @@ export default function CampaignDetailPage() {
 
       <Tabs value={visibleTab} onValueChange={(v) => setTab(v as TabValue)}>
         <TabsList className="flex-wrap">
-          <TabsTrigger value="selection">인플루언서 선정</TabsTrigger>
+          {!isShortform && <TabsTrigger value="selection">인플루언서 선정</TabsTrigger>}
+          {!isShortform && (
           <TabsTrigger value="progress" disabled={selectionRequired}>
             진행사항
             <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[10px] text-background tabular-nums">
               {campaign.creators.length}
             </span>
           </TabsTrigger>
+          )}
           <TabsTrigger value="tasks">업무 보드</TabsTrigger>
           <TabsTrigger value="notes">메모</TabsTrigger>
-          <TabsTrigger value="insights" disabled={selectionRequired}>
+          {!isShortform && <TabsTrigger value="insights" disabled={selectionRequired}>
             인사이트
             {needsMetrics && <span className="size-1.5 rounded-full bg-destructive" aria-label="수치 입력 필요" />}
-          </TabsTrigger>
-          <TabsTrigger value="settlement" disabled={selectionRequired}>정산</TabsTrigger>
+          </TabsTrigger>}
+          {!isShortform && <TabsTrigger value="settlement" disabled={selectionRequired}>정산</TabsTrigger>}
         </TabsList>
       </Tabs>
 

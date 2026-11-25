@@ -6,10 +6,10 @@ const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.
 
 // 기본값
 const d = w.defaultConfig();
-ok("기본: 샘플 화면 8개가 숨김", d.menus.hidden.length === 8 && ["/team", "/weekly", "/calendar", "/quotes", "/campaigns", "/sales-invoices", "/agents", "/agents/routines"].every((u) => d.menus.hidden.includes(u)));
+ok("기본: 샘플 화면 7개는 숨기고 실행 가능한 루틴은 표시", d.menus.hidden.length === 7 && ["/team", "/weekly", "/calendar", "/quotes", "/campaigns", "/sales-invoices", "/agents"].every((u) => d.menus.hidden.includes(u)) && !d.menus.hidden.includes("/agents/routines"));
 ok("기본: 홈 카드 12개가 모두 표시", d.home.length === 12 && d.home.every((x) => !x.hidden));
 ok("기본 카드 너비: 영업 현황 1/3 · 월별 문의 1/2 · 정리 대기 전체", d.home.find((x) => x.id === "status").width === 4 && d.home.find((x) => x.id === "months").width === 6 && d.home.find((x) => x.id === "cleanup").width === 12);
-ok("기본값은 호출마다 새 객체(공유 변경 방지)", w.defaultConfig() !== w.defaultConfig() && (w.defaultConfig().menus.hidden.push("x"), w.defaultConfig().menus.hidden.length === 8));
+ok("기본값은 호출마다 새 객체(공유 변경 방지)", w.defaultConfig() !== w.defaultConfig() && (w.defaultConfig().menus.hidden.push("x"), w.defaultConfig().menus.hidden.length === 7));
 
 // 읽기·쓰기
 const s = mem();

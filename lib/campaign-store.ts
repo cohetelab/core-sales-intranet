@@ -6,6 +6,8 @@ import dayjs from "dayjs";
 import { customers as seedCustomers } from "@/lib/mock-data";
 import { influencers as seedInfluencers } from "@/lib/influencer-data";
 import { DEMO_TODAY } from "@/lib/format";
+import type { VideoCreative } from "@/lib/video-performance";
+import type { VideoProduction } from "@/lib/video-production";
 
 const STORAGE_KEY = "core-sales-campaigns-v1";
 
@@ -27,6 +29,7 @@ export type ScriptStatus = "writing" | "review" | "done";
 export type VideoStatus = "writing" | "review" | "done";
 export type UploadStatus = "pending" | "uploaded" | "done";
 export type CampaignPackage = "managed" | "lite";
+export type CampaignType = "shortform" | "influencer";
 export type CampaignBrief = {
   product: string;
   goal: string;
@@ -65,8 +68,10 @@ export type CampaignCreator = {
   videoFeedback: string;
   uploadUrl: string;
   fee: number; // 크리에이터 지급 단가(KRW)
+  contractAmount?: number; // 이 정산 건에 배분된 광고주 계약대금(KRW)
   paid: boolean;
   settlementStatus?: "pending" | "processing" | "completed";
+  bankReconciliationNote?: string;
   views: number;
   likes: number;
   comments: number;
@@ -74,6 +79,8 @@ export type CampaignCreator = {
   videoUrl?: string;
   saves?: number;
   shares?: number;
+  creative?: VideoCreative;
+  production?: VideoProduction;
   dailyReach?: DailyReach[];
   paCode?: string;
 };
@@ -89,6 +96,7 @@ export type Campaign = {
   deadlines: { script: string; video: string; uploadFrom: string; uploadTo: string };
   creators: CampaignCreator[];
   packageType?: CampaignPackage;
+  campaignType?: CampaignType;
   brief?: CampaignBrief;
   selectionConfirmed?: boolean;
   tasks?: CampaignTask[];
@@ -185,6 +193,7 @@ function seedCampaign(): Campaign {
     deadlines: { script: d(5), video: d(12), uploadFrom: d(14), uploadTo: d(19) },
     creators,
     packageType: "managed",
+    campaignType: "influencer",
     brief: {
       product: "신제품",
       goal: "브랜드 인지도와 제품 리뷰 확보",
@@ -229,7 +238,7 @@ export function useCampaigns() {
   }, [campaigns, hydrated]);
 
   const create = React.useCallback(
-    (input: { name: string; brand: string; packageType: CampaignPackage; brief: CampaignBrief }) => {
+    (input: { name: string; brand: string; packageType: CampaignPackage; campaignType: CampaignType; brief: CampaignBrief }) => {
       const t = dayjs();
       const d = (n: number) => t.add(n, "day").format("YYYY-MM-DD");
       const campaign: Campaign = {
@@ -243,6 +252,7 @@ export function useCampaigns() {
         deadlines: { script: d(7), video: d(14), uploadFrom: d(16), uploadTo: d(21) },
         creators: [],
         packageType: input.packageType,
+        campaignType: input.campaignType,
         brief: input.brief,
         selectionConfirmed: false,
         tasks: [],

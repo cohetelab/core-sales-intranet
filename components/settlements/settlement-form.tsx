@@ -67,6 +67,7 @@ function SettlementFields({
   const [campaignName, setCampaignName] = React.useState(record?.campaignName ?? "");
   const [resultUrl, setResultUrl] = React.useState(record?.resultUrl ?? "");
   const [amount, setAmount] = React.useState(record?.amount ? String(record.amount) : "");
+  const [contractAmount, setContractAmount] = React.useState(record?.contractAmount !== undefined ? String(record.contractAmount) : "");
   const [note, setNote] = React.useState(record?.note ?? "");
   const [error, setError] = React.useState("");
 
@@ -78,6 +79,11 @@ function SettlementFields({
       setError("크리에이터와 올바른 지급 예정액을 입력해 주세요.");
       return;
     }
+    const parsedContractAmount = contractAmount.trim() === "" ? undefined : Number(contractAmount);
+    if (parsedContractAmount !== undefined && (!Number.isSafeInteger(parsedContractAmount) || parsedContractAmount < 0)) {
+      setError("계약대금은 0원 이상의 정수로 입력해 주세요.");
+      return;
+    }
     if (!isHttpUrl(url)) {
       setError("결과 URL은 http 또는 https 주소로 입력해 주세요.");
       return;
@@ -87,6 +93,7 @@ function SettlementFields({
       campaignName: campaignName.trim(),
       resultUrl: url,
       amount: parsedAmount,
+      contractAmount: parsedContractAmount,
       note: note.trim(),
     });
     router.push("/creator-settlements");
@@ -153,6 +160,22 @@ function SettlementFields({
                   required
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="settlement-contract-amount">계약대금 배분액 (원)</Label>
+                <Input
+                  id="settlement-contract-amount"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={contractAmount}
+                  onChange={(event) => setContractAmount(event.target.value)}
+                  placeholder="예: 800000"
+                />
+                <p className="text-xs text-muted-foreground">이 정산 건에 배분된 광고주 계약대금입니다. 미입력 시 순수익 계산에서 제외됩니다.</p>
+              </div>
+            </div>
+
+            <div className="grid gap-5 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="settlement-url">결과 URL</Label>
                 <Input

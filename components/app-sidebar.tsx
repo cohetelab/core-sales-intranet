@@ -110,6 +110,7 @@ function TwoLevelNav() {
               onClick={() => {
                 setPicked({ path: pathname, id: c.id });
                 setQuery("");
+                if (c.id === "campaign") router.push("/campaigns");
               }}
               aria-pressed={on}
               className={cn(

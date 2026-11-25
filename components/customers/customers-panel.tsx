@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { AddActivityDialog } from "@/components/customers/add-activity-dialog";
 import { AddCustomerDialog } from "@/components/customers/add-customer-dialog";
+import { CompanyResearchDialog } from "@/components/customers/company-research-dialog";
 import { EditCustomerDialog } from "@/components/customers/edit-customer-dialog";
 import { DeleteCustomerDialog } from "@/components/customers/delete-customer-dialog";
 import { OperationStatusBadge } from "@/components/customers/operation-status-badge";
@@ -246,6 +247,7 @@ export function CustomersPanel() {
                     >
                       세금계산서 준비
                     </Button>
+                    <CompanyResearchDialog customer={selected} />
                     <EditCustomerDialog customer={selected} />
                     <DeleteCustomerDialog
                       customer={selected}

@@ -19,7 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { progressPercent, stepStates, useCampaigns, type CampaignBrief, type CampaignPackage } from "@/lib/campaign-store";
+import { progressPercent, stepStates, useCampaigns, type CampaignBrief, type CampaignPackage, type CampaignType } from "@/lib/campaign-store";
 import { useCustomerStore } from "@/lib/customer-store";
 
 export default function CampaignsPage() {
@@ -53,7 +53,10 @@ export default function CampaignsPage() {
           {campaigns.map((c) => {
             const states = stepStates(c);
             const current = states.find((s) => s.state === "active");
-            const pct = progressPercent(c);
+            const isShortform = c.campaignType === "shortform";
+            const taskCount = (c.tasks ?? []).length;
+            const doneTasks = (c.tasks ?? []).filter((task) => task.status === "done").length;
+            const pct = isShortform ? (taskCount ? Math.round((doneTasks / taskCount) * 100) : 0) : progressPercent(c);
             return (
               <Card key={c.id} className="shadow-xs transition-shadow hover:shadow-sm">
                 <CardContent className="space-y-3">
@@ -61,7 +64,7 @@ export default function CampaignsPage() {
                     <Link href={`/campaigns/${c.id}`} className="min-w-0 flex-1 hover:underline">
                       <p className="truncate text-sm font-semibold">{c.name}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {c.brand} · {c.selectionConfirmed === false ? "인플루언서 선정 중" : "운영 중"}
+                        {c.brand} · {c.campaignType === "shortform" ? "숏폼 제작" : "인플루언서 마케팅"} · {c.selectionConfirmed === false && c.campaignType !== "shortform" ? "인플루언서 선정 중" : "운영 중"}
                       </p>
                     </Link>
                     <Button
@@ -79,7 +82,7 @@ export default function CampaignsPage() {
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">
-                        {current ? `${current.label} · ${current.note}` : "모든 단계 완료"}
+                        {isShortform ? `작업 ${doneTasks}/${taskCount}건 완료` : current ? `${current.label} · ${current.note}` : "모든 단계 완료"}
                       </span>
                       <span className="tabular-nums">{pct}%</span>
                     </div>
@@ -90,11 +93,10 @@ export default function CampaignsPage() {
 
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
-                      <UsersIcon className="size-3.5" /> {c.creators.length}명
+                      <UsersIcon className="size-3.5" /> {isShortform ? `${taskCount}개 작업` : `${c.creators.length}명`}
                     </span>
                     <span className="tabular-nums">
-                      업로드 {dayjs(c.deadlines.uploadFrom).format("MM/DD")} ~{" "}
-                      {dayjs(c.deadlines.uploadTo).format("MM/DD")}
+                      {isShortform ? `생성 ${dayjs(c.createdAt).format("MM/DD")}` : <>업로드 {dayjs(c.deadlines.uploadFrom).format("MM/DD")} ~{" "}{dayjs(c.deadlines.uploadTo).format("MM/DD")}</>}
                     </span>
                   </div>
 
@@ -128,12 +130,13 @@ function CreateDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onCreate: (input: { name: string; brand: string; packageType: CampaignPackage; brief: CampaignBrief }) => void;
+  onCreate: (input: { name: string; brand: string; packageType: CampaignPackage; campaignType: CampaignType; brief: CampaignBrief }) => void;
 }) {
   const { customers } = useCustomerStore();
   const [name, setName] = React.useState("");
   const [brand, setBrand] = React.useState("");
   const [packageType, setPackageType] = React.useState<CampaignPackage>("managed");
+  const [campaignType, setCampaignType] = React.useState<CampaignType>("influencer");
   const [brief, setBrief] = React.useState<CampaignBrief>({ product: "", goal: "", audience: "", message: "" });
   const valid = name.trim() !== "" && brand.trim() !== "" && brief.product.trim() !== "" && brief.goal.trim() !== "";
   const setBriefField = (field: keyof CampaignBrief, value: string) =>
@@ -145,6 +148,7 @@ function CreateDialog({
       name: name.trim(),
       brand: brand.trim(),
       packageType,
+      campaignType,
       brief: {
         product: brief.product.trim(),
         goal: brief.goal.trim(),
@@ -155,6 +159,7 @@ function CreateDialog({
     setName("");
     setBrand("");
     setPackageType("managed");
+    setCampaignType("influencer");
     setBrief({ product: "", goal: "", audience: "", message: "" });
   };
 
@@ -163,10 +168,31 @@ function CreateDialog({
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>캠페인 생성</DialogTitle>
-          <DialogDescription>캠페인 정보를 입력하고 추천 목록에서 크리에이터를 선정합니다.</DialogDescription>
+          <DialogDescription>캠페인 종류를 선택하고 프로젝트 정보를 입력합니다.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>캠페인 종류</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {([
+                { value: "shortform", title: "숏폼 제작", detail: "영상 제작 일정과 결과물을 관리" },
+                { value: "influencer", title: "인플루언서 마케팅", detail: "크리에이터 선정과 협업을 관리" },
+              ] as const).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={campaignType === option.value}
+                  onClick={() => setCampaignType(option.value)}
+                  className={`rounded-xl border p-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${campaignType === option.value ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}
+                >
+                  <span className="block text-sm font-medium">{option.title}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">{option.detail}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          {campaignType === "influencer" && (
           <div className="space-y-1.5">
             <Label>운영 방식</Label>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -188,6 +214,7 @@ function CreateDialog({
             </div>
             <p className="text-xs text-muted-foreground">운영 방식은 내부 관리용입니다. 상품 구매나 결제와 연결되지 않습니다.</p>
           </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="camp-name">캠페인 이름</Label>
             <Input id="camp-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 신제품 시딩 캠페인" />
@@ -230,7 +257,7 @@ function CreateDialog({
             취소
           </Button>
           <Button disabled={!valid} onClick={submit}>
-            생성하고 크리에이터 찾기
+            {campaignType === "shortform" ? "숏폼 캠페인 생성" : "생성하고 크리에이터 찾기"}
           </Button>
         </DialogFooter>
       </DialogContent>

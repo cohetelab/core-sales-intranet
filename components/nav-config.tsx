@@ -20,6 +20,7 @@ import {
   UserCogIcon,
   MegaphoneIcon,
   ReceiptTextIcon,
+  Repeat2Icon,
   SearchIcon,
   SproutIcon,
   UsersIcon,
@@ -30,6 +31,7 @@ import {
   ChartNoAxesCombinedIcon,
   LayoutGridIcon,
   SheetIcon,
+  ShieldCheckIcon,
 } from "lucide-react";
 
 export type NavItem = {
@@ -122,7 +124,10 @@ export const NAV_CATEGORIES: NavCategory[] = [
     id: "pms",
     label: "PMS",
     icon: <ChartNoAxesCombinedIcon />,
-    items: [{ title: "콘텐츠 성과", url: "/pms", icon: <ChartNoAxesCombinedIcon /> }],
+    items: [
+      { title: "콘텐츠 성과", url: "/pms", icon: <ChartNoAxesCombinedIcon /> },
+      { title: "숏폼 제작", url: "/pms/production", icon: <ClapperboardIcon /> },
+    ],
   },
   {
     id: "agents",
@@ -130,6 +135,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
     icon: <BotIcon />,
     items: [
       { title: "에이전트 허브", url: "/agents", icon: <BotIcon /> },
+      { title: "루틴", url: "/agents/routines", icon: <Repeat2Icon /> },
       { title: "회의실", url: "/agents/room", icon: <MessagesSquareIcon /> },
       { title: "에이전트 관리", url: "/agents/roster", icon: <UserCogIcon /> },
       { title: "페퍼", url: "/agents/pepper", icon: <MessageCircleIcon /> },
@@ -141,6 +147,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
     icon: <SproutIcon />,
     items: [
       { title: "팀 지식창고", url: "/knowledge", icon: <FolderIcon /> },
+      { title: "인트라넷 QA", url: "/qa", icon: <ShieldCheckIcon /> },
       {
         title: "Core Insta Hub",
         url: "/insta-hub",
