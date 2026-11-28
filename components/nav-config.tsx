@@ -72,6 +72,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
       { title: "구글 드라이브로 보기", url: "/customers/drive", icon: <FolderIcon /> },
       { title: "계약·견적", url: "/quotes", icon: <ReceiptTextIcon /> },
       { title: "리포트", url: "/reports", icon: <ChartBarIcon /> },
+      { title: "광고 현황", url: "/ad-status", icon: <ChartNoAxesCombinedIcon /> },
       { title: "팀", url: "/team", icon: <UsersIcon /> },
     ],
   },
